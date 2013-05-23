@@ -72,7 +72,7 @@ Step 8
 
 Run 'pairitel_astropy_4.py' in the astropy shell.
 
-This script matches the Pairitel sources to nearby 2MASS sources for each image and applies a linear correction to match the Pairitel magnitudes with the 2MASS ones. The result is writeen into 3 files with the names 'calibratedmags_(band).dat' in each nightly folder.
+This script matches the Pairitel sources to nearby 2MASS sources for each image and applies a linear correction to match the Pairitel magnitudes with the 2MASS ones. The result is written into 3 files with the names 'calibratedmags_(band).dat' in each nightly folder.
 
 execfile('/data/swolk/kpoppen/Dropbox/MyPython/PAIRITEL/pairitel_astropy_4.py')
 
@@ -80,7 +80,8 @@ Step 9
 
 Run 'pairitel_astropy_5.py' in the astropy shell.
 
-This script matches the Pairitel sources to nearby 2MASS sources for each image and applies a linear correction to match the Pairitel magnitudes with the 2MASS ones. The result is writeen into 3 files with the names 'calibratedmags_(band).dat' in each nightly folder.
+This script uses the coordinates saved in the masterreg file to bundle the objects (necessary because I couldn't get the pyraf object IDs to match); this yields three files, one for each band, which contain [object_id ra dec time band_magnitude band_error] similar to the YSOVAR database, i.e. multiple lines for one object which have the same object_ID.
+These files can be added to the YSOVAR_atlas object class as usual.
 
 execfile('/data/swolk/kpoppen/Dropbox/MyPython/PAIRITEL/pairitel_astropy_5.py')
 

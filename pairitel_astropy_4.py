@@ -72,6 +72,12 @@ for filename in filelist[:]:
 	(pairitel[i]['RA'], pairitel[i]['DEC']) = gc.pixel2world(pairitel[i]['XCENTER'], pairitel[i]['YCENTER'])
     
     plt.close()
+    hdulist = pyfits.open(imagefile)
+    t = np.float(hdulist[0].header['HJULDATE'])
+    hdulist.close()
+    
+    pairitel.add_column(Column(data = np.ones(len(pairitel['ID']))*t, name='t'))
+    
     
     # find best-matching 2mass source for each pairitel source; if distance small enough, add the 2mass magnitude to the pairitel table.
     

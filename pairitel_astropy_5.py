@@ -95,61 +95,48 @@ r_match = 0.1 * 1./3600.
 
 bands = ['H', 'K', 'J']
 
-a1=[]
-a2=[]
-a3=[]
-a4=[]
-a5=[]
-a6=[]
-a7=[]
-a8=[]
-a9=[]
-a10=[]
-names = ['Pair_ID', 'ra', 'dec', 't', 'H', 'H_err', 'J', 'J_err', 'K', 'K_err']
-tab = Table([a1, a2, a3, a4, a5, a6, a7, a8, a9, a10], names=names)
-#tab.add_row([0,0,0,0,0,0,0,0,0,0])
-tab.add_row(np.zeros(10))
-
 (ra, dec) = photometry_wcs.coords_from_ds9(input_info.masterregfile)
 p_id = np.arange(0, len(ra))
 
 
 for b in bands[:]:
+    a1=[]
+    a2=[]
+    a3=[]
+    a4=[]
+    a5=[]
+    a6=[]
+    a7=[]
+    a8=[]
+    a9=[]
+    a10=[]
+    names = ['Pair_ID', 'ra', 'dec', 't', 'H', 'H_err', 'J', 'J_err', 'K', 'K_err']
+    tab = Table([a1, a2, a3, a4, a5, a6, a7, a8, a9, a10], names=names)
+        
     print b
     filepath =  input_info.resultfolder + '*YSO*/calibratedmags_' + b.lower() + '.dat' 
     filelist = glob.glob(filepath)
     filelist.sort()
-    imagepath =  input_info.resultfolder + '*YSO*/' + b.lower() + '_long*_wcs.fits' 
-    imagelist = glob.glob(imagepath)
-    imagelist.sort()
     for i in p_id:
         print i
 	for j in np.arange(0, len(filelist[:])):
-	    #print filelist[j]
-	    # get time stamp of observation.
-	    # Ah, this would be faster if I had collected the HJDs already when I made the calibratedmags files. Bummer.
-	    hdulist = pyfits.open(imagelist[j])
-	    t = np.float(hdulist[0].header['HJULDATE'])
-	    hdulist.close()
 	    # find source in calibratedmags file of a given night.
 	    a = asciitable.read(filelist[j])
-	    distance = np.sqrt((ra[i] - a['RA'])**2 + (dec[i] - a['DEC'])**2)
-	    if distance.min() < r_match:
+	    # look only at the ones which are near in dec:
+	    ind_near = np.where(np.abs(a['DEC'] - dec[i]) <= r_match)[0]
+	    # do full distance calculation for those:
+	    if len(ind_near) > 0:
+	        distance = np.sqrt((ra[i] - a[ind_near]['RA'])**2 + (dec[i] - a[ind_near]['DEC'])**2)
 		ind = np.where(distance == distance.min())[0][0]
-		m = a[ind]['P' + b + '_cal']
-		merr = a[ind]['P' + b + '_cal_err']
 		tab.add_row(np.ones(len(names))*np.nan)
 		tab[-1]['Pair_ID'] = i
 		tab[-1]['ra'] = ra[i]
 		tab[-1]['dec'] = dec[i]
-		tab[-1]['t'] = t
-		tab[-1][b] = m
-		tab[-1][b + '_err'] = merr
+		tab[-1]['t'] = a[0]['t'] - 2400000.5 # all lines in a given nightly file have the same time stamp.
+		tab[-1][b] = a[ind_near[ind]]['P' + b + '_cal']
+		tab[-1][b + '_err'] = a[ind_near[ind]]['P' + b + '_cal_err']
 	    
-	
-
-
-asciitable.write(tab, input_info.resultfolder + 'JHK_pairitel.csv' )
+    asciitable.write(tab, input_info.resultfolder + b + '_pairitel.csv' )
 
 
 
