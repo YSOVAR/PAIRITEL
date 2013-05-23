@@ -25,16 +25,14 @@ reload(photometry_both)
 # load 2mass catalogue from disk:
 data2mass = asciitable.read(input_info.resultfolder + '2mass_for_cal.dat')
 
-# find all .als.* files - this should only be one file per image, except for the masterimage which has als.1, als.2, and als.3:
+# find all .als.1 files:
 filepath =  input_info.resultfolder + '*YSO*/*.als.1' 
 filelist = glob.glob(filepath)
 filelist.sort()
-# get rid of the two old als files of the masterimage:
-#filelist.remove(input_info.masterimage + '.als.1')
-#filelist.remove(input_info.masterimage + '.als.2')
 
 f = plt.figure()
 chisq = np.ones(len(filelist))*-99999.
+chisq_real = np.ones(len(filelist))*-99999.
 
 
 # now transform found pairitel sources into wcs, find matching 2mass sources, and calibrate pairitel against 2mass. I use nominal errors of 0.1 mag for all pairitel sources instead of the output errors from the psf photometry. This is because sometimes there is large variability in a bright source (which has a small photometric error), which then would mess up the whole line fitting because that data point would have so much weight.
@@ -124,6 +122,7 @@ for filename in filelist[:]:
     n = np.where(filename == np.array(filelist))[0][0]
     #chisq[n] = np.sum(((pairitel[good][band2mp] - (pfinal[0] + pfinal[1]*pairitel[good][band2m]))/(pairitel[good][band2mpe]))**2.)/len(pairitel[good])
     chisq[n] = np.sum(((pairitel[good][band2mp] - (pfinal[0] + pfinal[1]*pairitel[good][band2m]))/(error))**2.)/len(pairitel[good])
+    chisq_real[n] = np.sum(((pairitel[good][band2mp] - (pfinal[0] + pfinal[1]*pairitel[good][band2m]))/(pairitel[good][band2mpe]))**2.)/len(pairitel[good])
     
     ax.text(0.3, 0.7, 'red. chi**2 = ' + str(np.round(chisq[n],1)), horizontalalignment='center', verticalalignment='center', transform = ax.transAxes)
     plt.show()
@@ -135,6 +134,10 @@ for filename in filelist[:]:
 print np.where(chisq > 5)[0]
 plt.figure()
 plt.hist(chisq, bins=100)
-plt.title('Distribution of reduced chi**2 values')
+plt.title('Distribution of reduced chi**2 values (using constant errors of 0.1 mag)')
+
+plt.figure()
+plt.hist(chisq_real, bins=100)
+plt.title('Distribution of reduced chi**2 values (using daophot errors)')
 
 

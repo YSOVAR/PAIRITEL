@@ -21,6 +21,9 @@ reload(photometry_wcs)
 import photometry_both
 reload(photometry_both)
 
+
+# uncomment this to visually inspect the positions of the sources found for every nights.
+
 ## find files with the calibrated magnitudes:
 #filepath =  input_info.resultfolder + '*YSO*/calibratedmags*.dat' 
 #filelist = glob.glob(filepath)
@@ -40,57 +43,9 @@ reload(photometry_both)
 #b = asciitable.read(master)
 #gc.show_markers(np.array(b['RA']), np.array(b['DEC']), marker = '+', edgecolor='b', facecolor='b')
 
-# collect values into light curves:
 
-# first get master coordinates from masterregfile.
-
-
-#(ra, dec) = photometry_wcs.coords_from_ds9(input_info.masterregfile)
-#p_id = np.arange(0, len(ra))
-
-## make one LC:
-#filepath =  input_info.resultfolder + '*YSO*/calibratedmags_h.dat' 
-#filelist = glob.glob(filepath)
-#filelist.sort()
-#imagepath =  input_info.resultfolder + '*YSO*/h_long*_wcs.fits' 
-#imagelist = glob.glob(imagepath)
-#imagelist.sort()
-
-
-#b = asciitable.read(os.path.dirname(input_info.masterimage) + '/calibratedmags_h.dat')
-#ind = np.where(b['PH_cal'] < 11.)[0][4]
-#distance = np.sqrt((ra - b[ind]['RA'])**2 + (dec - b[ind]['DEC'])**2)
-#ind_file = np.where(distance == distance.min())[0][0]
-
-#lc = []
-#t = []
-#e = []
-#n = ind_file
-##n=550
-
-#for i in np.arange(0, len(filelist)):
-    #print i
-    #a = asciitable.read(filelist[i])
-    #distance = np.sqrt((ra[n] - a['RA'])**2 + (dec[n] - a['DEC'])**2)
-    #if distance.min() < 0.1*1./3600.:
-        #ind = np.where(distance == distance.min())[0][0]
-        #lc.append(a[ind]['PH_cal'])
-        #e.append(a[ind]['PH_cal_err'])
-        #hdulist = pyfits.open(imagelist[i])
-        #t.append(np.float(hdulist[0].header['HJULDATE']))
-        #hdulist.close()
-
-
-#errorbar(t, lc, e, fmt = '.',  )
-#plt.gca().invert_yaxis()
-
-# ok, needed for reading into ysovar atlas: a file which has the entries:
-# source_id mag   mag_err time
-# 0         15.0  0.1     234...
-# 0         14.9  0.11    234...
-# etc. for every source id.
-
-
+# match sources into light curves. matching radius of 0.1 arcsec is good for this.
+# for visual check, uncomment the stuff above - it overplots the positions of the detected sources in each night.
 r_match = 0.1 * 1./3600.
 
 bands = ['H', 'K', 'J']
