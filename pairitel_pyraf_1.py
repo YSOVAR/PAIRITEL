@@ -40,13 +40,12 @@ extractlist.sort()
 # perform aperture photometry on those images; found sources are also saved as a ds9 region file for checking by eye.
 photometry.do_aperture_photometry(extractlist)
 
-#check h band images for best sharpness. J has usually less contrast between sky and sources, K is often bad.
-# if you want to check the other bands, use '*YSO*/*_wcs.fits.coo.1' instead.
-datapath = input_info.resultfolder + '*YSO*/h*_wcs.fits.coo.1'
+#check images for best sharpness.
+datapath = input_info.resultfolder + '*YSO*/*_wcs.fits.coo.1'
 datalist = glob.glob(datapath)
 datalist.sort()
 
-(sharpnesses, bestfiles, bestsharps, mostfiles, stars_found) = photometry.sort_by_sharpness(datalist, nbest=5)
+(sharpnesses, bestfiles, bestsharps, mostfiles, stars_found) = photometry.sort_by_sharpness(datalist, nbest=8)
 
 print 'These are the sharpest images.\n'
 for b in bestfiles: print b[0:-6]

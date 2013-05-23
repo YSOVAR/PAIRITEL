@@ -12,16 +12,13 @@
 #                                       k_long_xxxxxxx_coadd.fits
 #                                       k_long_xxxxxxx_coadd.weight.fits
 
-# it is generally a good idea to make a copy of your entire data before you start the analysis, in case something goes wrong and an original data file gets scrambled.
+# The pairitel_pyraf_0.py script makes a copy of all the raw data, so in case something gets scrambled, you will still have an unaltered copy of the data.
 
 # this is your parent folder in which you stored all your unprocessed data.
 rawdatafolder='/swiper.real/kpoppen/IR/I20050/'
 
-
 # this is your parent folder in which you want all your processes files to be stored.
 resultfolder='/swiper.real/kpoppen/IR/I20050/output/'
-
-#paramdir='/swiper.real/kpoppen/IR/I20050'
 
 # this is the folder in which you stored the pairitel scripts.
 pairitel_scripts_path = '/data/swolk/kpoppen/Dropbox/MyPython/PAIRITEL'
