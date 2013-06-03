@@ -13,12 +13,11 @@ import glob
 import os
 import sys
 import asciitable
-sys.path.append("/data/hguenther/Dropbox/code/python")
-import atpyextensions
-sys.path.append("/data/hguenther/Dropbox/code/python/atpy")
-import atpy
-sys.path.append("/swiper.real/kpoppen/Dropbox/MyPython/PAIRITEL/")
-from atpyextensions import catalog
+#sys.path.append("/data/hguenther/Dropbox/code/python")
+#import atpyextensions
+#sys.path.append("/data/hguenther/Dropbox/code/python/atpy")
+#import atpy
+#from atpyextensions import catalog
 import numpy as np
 import string
 import pickle

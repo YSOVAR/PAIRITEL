@@ -10,7 +10,7 @@ import glob
 import os
 from scipy import optimize
 from astropy.table import Table, Column
-sys.path.append('/data/swolk/kpoppen/Dropbox/MyPython/YSOVAR/YSOVAR-master')
+# YSOVAR python scripts need to be in the PYTHONPATH for the following line:
 from great_circle_dist import dist_radec, dist_radec_fast
 
 import urllib

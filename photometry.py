@@ -16,7 +16,7 @@ import shutil
 import sys
 import asciitable
 #import catalog
-from atpyextensions import catalog
+#from atpyextensions import catalog
 import pyfits
 from copy import deepcopy
 
@@ -316,10 +316,10 @@ def psf_photometry_pairitel(imagebi, satmag, psfstarfile='', ds9=False):
     if psfstarfile == '':
         # let iraf select stars for psf fitting.
         out=iraf.pstselect(imagebi, 'default', 'default', maxnpsf=10, psfrad=0, fitrad=iraf.daopars.psfrad, Stdout=1)
-        pstcat=catalog.CartesianCatalog(get_last_iraf(imagebi+'.pst'), type='daophot', RA='XCENTER', DEC='YCENTER')
+        #pstcat=catalog.CartesianCatalog(get_last_iraf(imagebi+'.pst'), type='daophot', RA='XCENTER', DEC='YCENTER')
         # The following line works because Python short-circuits bolean expressions
         # If the first is true, then pst cat is [], so it is important that pstcat['MAG'] is not called
-        print pstcat
+        #print pstcat
         # filter the pst file so that stars which are too bright are deleted. 
         psf_star_checking(get_last_iraf(imagebi+'.pst'), satmag)
         # now fit a psf model to the cleaned list of psf stars.
@@ -373,10 +373,10 @@ def psf_photometry_pairitel_with_coo(imagebi, satmag, psfstarfile='', ds9=False)
     if psfstarfile == '':
         # let iraf select stars for psf fitting.
         out=iraf.pstselect(imagebi, 'default', 'default', maxnpsf=10, psfrad=0, fitrad=iraf.daopars.psfrad, Stdout=1)
-        pstcat=catalog.CartesianCatalog(get_last_iraf(imagebi+'.pst'), type='daophot', RA='XCENTER', DEC='YCENTER')
+        #pstcat=catalog.CartesianCatalog(get_last_iraf(imagebi+'.pst'), type='daophot', RA='XCENTER', DEC='YCENTER')
         # The following line works because Python short-circuits bolean expressions
         # If the first is true, then pst cat is [], so it is important that pstcat['MAG'] is not called
-        print pstcat
+        #print pstcat
         # filter the pst file so that stars which are too bright are deleted. 
         psf_star_checking(get_last_iraf(imagebi+'.pst'), satmag)
         # now fit a psf model to the cleaned list of psf stars.
@@ -451,71 +451,71 @@ def deletefrompst(pstfile, deletelist):
     fin.close()
     fout.close()
     
-def filter_pstfile(pstfile, magfile):
-    '''Delete stars from pst file, which have neighbours of similar magnitude close by.
+#def filter_pstfile(pstfile, magfile):
+    #'''Delete stars from pst file, which have neighbours of similar magnitude close by.
     
-    This is a test in addition to iraf.pstselect, which sorts out those stars
-    with brighter neighbours, with bad pixels etc.
-    '''
-    pstcat=catalog.CartesianCatalog(pstfile, type='daophot', RA='XCENTER', DEC='YCENTER')
-    '''It would be simpler to read magfile directly into BaseCatalog, but in some cases the fields get so long
-    that there is no space in between and asciitable cannot seperate them. txdump on the other hand
-    actually read the column width from the file and extracts the fields even if they are not separated by spaces.'''
-    magoutput='IMAGE,ID,XCENTER,YCENTER,XAIRMASS,IFILTER,MAG,MERR,PERROR'
-    mags=iraf.txdump(magfile,magoutput,'PERROR=="NoError" && MAG!=INDEF && MERR !=INDEF',Stdout=1)
-    magcat=catalog.CartesianCatalog(mags, type = 'ascii', Reader=asciitable.NoHeaderReader, names = magoutput.split(','), RA='XCENTER', DEC='YCENTER')
+    #This is a test in addition to iraf.pstselect, which sorts out those stars
+    #with brighter neighbours, with bad pixels etc.
+    #'''
+    #pstcat=catalog.CartesianCatalog(pstfile, type='daophot', RA='XCENTER', DEC='YCENTER')
+    #'''It would be simpler to read magfile directly into BaseCatalog, but in some cases the fields get so long
+    #that there is no space in between and asciitable cannot seperate them. txdump on the other hand
+    #actually read the column width from the file and extracts the fields even if they are not separated by spaces.'''
+    #magoutput='IMAGE,ID,XCENTER,YCENTER,XAIRMASS,IFILTER,MAG,MERR,PERROR'
+    #mags=iraf.txdump(magfile,magoutput,'PERROR=="NoError" && MAG!=INDEF && MERR !=INDEF',Stdout=1)
+    #magcat=catalog.CartesianCatalog(mags, type = 'ascii', Reader=asciitable.NoHeaderReader, names = magoutput.split(','), RA='XCENTER', DEC='YCENTER')
 
-    pstquality = np.zeros(len(pstcat))
+    #pstquality = np.zeros(len(pstcat))
 
-    for source in range(len(pstcat)):
-        neighbours = magcat.allwithin((pstcat['XCENTER'][source],pstcat['YCENTER'][source]), iraf.daopars.psfrad)
-        pstquality[source] = judge_pst_quality(neighbours)
+    #for source in range(len(pstcat)):
+        #neighbours = magcat.allwithin((pstcat['XCENTER'][source],pstcat['YCENTER'][source]), iraf.daopars.psfrad)
+        #pstquality[source] = judge_pst_quality(neighbours)
 
-    cutoff = len(pstcat) / 3  # use integers
-    dellist = (pstcat['ID'][pstquality.argsort()])[:cutoff]
+    #cutoff = len(pstcat) / 3  # use integers
+    #dellist = (pstcat['ID'][pstquality.argsort()])[:cutoff]
     
-    #star special filtering by hand. This is stuff I could not come by automatically
-    filttab = asciitable.read(os.path.join(paramdir,'filttab.dat'), converters={'str1': asciitable.convert_numpy('str'), 'str2': asciitable.convert_numpy('str')} )
-    # Go through each line of a table
-    # This is not ideal but fast to program
-    for line in filttab:
-        if (line['str1'] in pstfile) and (line['str2'] in pstfile):
-            if line['Action'] == 'del':
-                indexinpstcat = pstcat.coords.NNindex((line['X'],line['Y']), 5)
-                if indexinpstcat != None:  # It could be None if that object is not in the pstcat for other reasons
-                    dellist = np.hstack((dellist,pstcat.ID[indexinpstcat]))
-            elif line['Action'] == 'keep': 
-                index = np.ones(len(dellist), dtype='bool')
-                indexinpstcat = pstcat.coords.NNindex((line['X'],line['Y']), 5)
-                if indexinpstcat != None:  # It could be None if that object is not in the pstcat for other reasons
-                    index[np.where(dellist == pstcat.ID[indexinpstcat])[0]] = False
-                    dellist = dellist[index]
-            elif line['Action'] == 'ignore':
-                return 0
-            else:
-                raise ValueError(os.path.join(paramdir,'filttab.dat')+ ' contains unrecognised instructions')
-    deletefrompst(pstfile, dellist)
-    return len(pstcat)-len(dellist)
+    ##star special filtering by hand. This is stuff I could not come by automatically
+    #filttab = asciitable.read(os.path.join(paramdir,'filttab.dat'), converters={'str1': asciitable.convert_numpy('str'), 'str2': asciitable.convert_numpy('str')} )
+    ## Go through each line of a table
+    ## This is not ideal but fast to program
+    #for line in filttab:
+        #if (line['str1'] in pstfile) and (line['str2'] in pstfile):
+            #if line['Action'] == 'del':
+                #indexinpstcat = pstcat.coords.NNindex((line['X'],line['Y']), 5)
+                #if indexinpstcat != None:  # It could be None if that object is not in the pstcat for other reasons
+                    #dellist = np.hstack((dellist,pstcat.ID[indexinpstcat]))
+            #elif line['Action'] == 'keep': 
+                #index = np.ones(len(dellist), dtype='bool')
+                #indexinpstcat = pstcat.coords.NNindex((line['X'],line['Y']), 5)
+                #if indexinpstcat != None:  # It could be None if that object is not in the pstcat for other reasons
+                    #index[np.where(dellist == pstcat.ID[indexinpstcat])[0]] = False
+                    #dellist = dellist[index]
+            #elif line['Action'] == 'ignore':
+                #return 0
+            #else:
+                #raise ValueError(os.path.join(paramdir,'filttab.dat')+ ' contains unrecognised instructions')
+    #deletefrompst(pstfile, dellist)
+    #return len(pstcat)-len(dellist)
 
 
-def judge_pst_quality(pstcat):
-    '''assign a number for the usability of a star for psf fitting
+#def judge_pst_quality(pstcat):
+    #'''assign a number for the usability of a star for psf fitting
     
-    The function computes a number based on the distance and the magnitude difference 
-    of the psf star to the brightest neighbour within iraf.daophot.psfrad
+    #The function computes a number based on the distance and the magnitude difference 
+    #of the psf star to the brightest neighbour within iraf.daophot.psfrad
      
-     A bigger number indicates a better quality, i.e. the star is much brighter 
-     than all neighbours and the next brightest neighbour is far away.
-    '''
-    if len(pstcat) == 0: 
-        return 0    #source might be in *.mag file, but has been sorted from the catalog before, so it is likely not a good source
-    else:
-        if len(pstcat) == 1:
-            return (30-float(pstcat['MAG'][0])) * 10 #no neighbours, but make brighter stars better
-        else:
-            pstcat.sort('MAG')
-            dist = pstcat.coords.distto((pstcat['XCENTER'][0],pstcat['YCENTER'][0]))
-            return (float(pstcat['MAG'][1])-float(pstcat['MAG'][0])) * np.sqrt(dist[1])
+     #A bigger number indicates a better quality, i.e. the star is much brighter 
+     #than all neighbours and the next brightest neighbour is far away.
+    #'''
+    #if len(pstcat) == 0: 
+        #return 0    #source might be in *.mag file, but has been sorted from the catalog before, so it is likely not a good source
+    #else:
+        #if len(pstcat) == 1:
+            #return (30-float(pstcat['MAG'][0])) * 10 #no neighbours, but make brighter stars better
+        #else:
+            #pstcat.sort('MAG')
+            #dist = pstcat.coords.distto((pstcat['XCENTER'][0],pstcat['YCENTER'][0]))
+            #return (float(pstcat['MAG'][1])-float(pstcat['MAG'][0])) * np.sqrt(dist[1])
 
     
 
