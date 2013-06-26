@@ -14,10 +14,10 @@
 
 # The pairitel_pyraf_0.py script makes a copy of all the raw data, so in case something gets scrambled, you will still have an unaltered copy of the data.
 
-# this is your parent folder in which you stored all your unprocessed data.
+# this is your parent folder in which you stored all your unprocessed data. Add '/' at the end.
 rawdatafolder='/swiper.real/kpoppen/IR/NGC2264/'
 
-# this is your parent folder in which you want all your processes files to be stored.
+# this is your parent folder in which you want all your processes files to be stored. Add '/' at the end.
 resultfolder='/swiper.real/kpoppen/IR/NGC2264/output/'
 
 # this is the folder in which you stored the pairitel reduction scripts.
