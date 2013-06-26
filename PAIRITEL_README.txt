@@ -18,7 +18,11 @@ The 'pairitel_pyraf_0.py' script will do some basic operations on the files - it
 
 Step 3
 
-Run 'pairitel_pyraf_1.py' in the pyraf shell. This script will do the aperture photometry for all nights and tell you which night yielded the sharpest images, it also tells you in which image the most sources were found by aperture photometry. Look at those images by hand (for example with ds9) and choose one of them as your master image for the source extraction. Save that filename, including the path, in the input_info.py file.
+Run 'pairitel_pyraf_1.py' in the pyraf shell. This script will do the aperture photometry for all nights.
+
+(By the way: you can check the results of the aperture photometry by loading the .coo.1 file of an image into DS9 (load region - selection: all - (click file) - format: X Y - coordinate system: image).)
+
+The script will tell you which night yielded the sharpest images, it also tells you in which image the most sources were found by aperture photometry. Look at those images by hand (for example with ds9) and choose one of them as your master image for the source extraction. Save that filename, including the path, in the input_info.py file.
 
 Then open that image in ds9 (if it's not open yet) and define ca. 10 single, bright, but not saturated stars as your stars for the psf fitting. Do this by placing circular regions centered on those stars (the radius does not matter), and save those regions, using decimal fk5 coordinates. Save the filename of that file, including the path, in the input_info.py file. I usually save mine in the parent folder of the individual nights, so that I can find it easily if I want to check something by hand in ds9.
 It can help to open some more images and add more psf stars to that file, especially if the central point of your nightly observations shifts a lot.
@@ -51,7 +55,7 @@ Step 6
 
 Run 'pairitel_pyraf_3.py' in the pyraf shell.
 
-This script performs the psf photometry for all other images, using the master source list derived from the master image. 
+This script performs the psf photometry for all other images, using the master source list derived from the master image. After doing this, blink all final psf fits in ds9 and see if everything looks good. Also blink all .sub.2.fits files; those are the files in which all found sources are subtracted, and those files should not have huge holes in them. If there are files in which no stars were subtracted or weird stuff happened, try a smaller radius for input_info.psfcleaningradius.
 
 
 Step 7
@@ -65,16 +69,29 @@ Step 8
 
 Run 'pairitel_astropy_4.py' in the astropy shell.
 
-This script matches the Pairitel sources to nearby 2MASS sources for each image and applies a linear correction to match the Pairitel magnitudes with the 2MASS ones. The result is written into 3 files with the names 'calibratedmags_(band).dat' in each nightly folder.
+This script collects the raw magnitudes of all sources in all nights and combines them into (uncalibrated) light curves for each source. All light curves are stored in a single file, where each source is given a unique identifier (similar to the YSOVAR2 database). This file is by default:
+input_info.resultfolder + 'rawlcs.dat'
 
 
 Step 9
 
 Run 'pairitel_astropy_5.py' in the astropy shell.
 
-This script uses the coordinates saved in the masterreg file to bundle the objects (necessary because I couldn't get the pyraf object IDs to match); this yields three files, one for each band, which contain [object_id ra dec time band_magnitude band_error] similar to the YSOVAR database, i.e. multiple lines for one object which have the same object_ID.
-These files can be added to the YSOVAR_atlas object class as usual.
+This script uses the infrastructure provided by the pYSOVAR package; the uncalibrated light curves are transformed into an atlas object which adds some nice functionalities the script will use.
+The matching 2MASS magnitudes are found for sources which have 2MASS counterparts. 
+If the user has supplied a catalog file which lists class 1 and class 2 sources, those identifiers are also added (see catalogfile etc. in input_info.py). 
+The calibrated the Pairitel data to the 2mass data in two steps:
+1. All sources with 2MASS counterparts are used. All magnitudes are shifted linearly to the 2MASS amgnitudes, and the standard deviation of (Pairitel_calibarted - 2MASS) is added to the photometric errors as the systematic error induced by the fit. This will overestimate the true errors: In this fit, there will be intrinsically variable sources which induce a large scatter. 
 
+There will be a figure displayed which shows a histogram of the scatter of the now calibrated light curves. Choose a threshold from this; you want mostly contant light curves for the second step of the calibration. But you also want to choose enough quasi-constant sources to make a meaningful fit, so go for something slightly to the left of the peak. Put this value into input_info.py (threshold_lc).
+
+
+Step 10
+
+Run 'pairitel_astropy_6.py' in the astropy shell.
+
+This performs the second round of calibration to the 2MASS data:
+2. The script looks at all calibrated light curves created in the previous step, takes the ones which are less variable than the user-defined threshold, and re-calibrates the Pairitel data using only those (mostly non-variable) objects. Then the scatter will be much smaller, but still somewhat over-estimated because some of the calibration sources may still have some low-level intrinsic variability.
 
 
 
