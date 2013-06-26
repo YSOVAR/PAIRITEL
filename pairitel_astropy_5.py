@@ -2,16 +2,21 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import aplpy
-import pyfits
+import astropy.io.fits as pyfits
 import astropy
-import astropy.io.ascii as asciitable
+import astropy.io.ascii as ascii
 from copy import deepcopy
 import glob
 import os
 from scipy import optimize
 from astropy.table import Table, Column
-# YSOVAR python scripts need to be in the PYTHONPATH for the following line:
-from great_circle_dist import dist_radec, dist_radec_fast
+import sys
+import YSOVAR
+from YSOVAR import atlas
+from YSOVAR.great_circle_dist import dist_radec, dist_radec_fast
+from astropy.wcs import WCS
+from astropy.io import fits
+
 
 import urllib
 import StringIO
@@ -22,117 +27,86 @@ import photometry_wcs
 reload(photometry_wcs)
 import photometry_both
 reload(photometry_both)
+import calibration
+reload(calibration)
 
 
-# uncomment this to visually inspect the positions of the sources found for every nights.
-
-## find files with the calibrated magnitudes:
-#filepath =  input_info.resultfolder + '*YSO*/calibratedmags*.dat' 
-#filelist = glob.glob(filepath)
-#filelist.sort()
-
-#gc = aplpy.FITSFigure(input_info.masterimage)
-#gc.show_grayscale()
-
-#print 'Overplotting positions of found sources of all nights and bands. This may take a while.'
-#for i in np.arange(0, len(filelist)):
-    #a = asciitable.read(filelist[i])
-    #gc.show_markers(np.array(a['RA']), np.array(a['DEC']), marker = '+', edgecolor='r', facecolor='r')
 
 
-#master = os.path.dirname(input_info.masterimage) + '/calibratedmags_' + os.path.basename(input_info.masterimage)[0] + '.dat'
-#masterals = input_info.masterimage + '.als.1'
-#b = asciitable.read(master)
-#gc.show_markers(np.array(b['RA']), np.array(b['DEC']), marker = '+', edgecolor='b', facecolor='b')
+# Read the uncalibrated light curves from disk:
+ptl = ascii.read(input_info.resultfolder + 'rawlcs.dat')
+
+# now transform this into a ysovar atlas object.
+stars = atlas.dict_from_csv(csvfile=input_info.resultfolder + 'rawlcs.dat',  match_dist = 0., min_number_of_times = 5, channels = {'j': 'J', 'h': 'H', 'k': 'K'}, data = [], floor_error = {'j': 0., 'h': 0., 'k': 0.}, mag = 'mag_raw', emag = 'mag_raw_err', time = 't', bg = None, source_name = 'PID',  verbose = True, readra='ra', readdec='de', sourceid='PID', channelcolumn='filter')
+
+atlas.check_dataset(stars)
+
+mycloud = atlas.YSOVAR_atlas(lclist = stars)
+
+# add the pairitel id as float to the atlas:
+mycloud.add_catalog_data(ptl, names = ['PID'], ra1='ra', dec1='dec', ra2='ra', dec2='de')
+
+# now find matching 2MASS sources for that.
+# load 2mass catalogue from disk:
+data2mass = ascii.read(input_info.resultfolder + '2mass_for_cal.dat')
+data2mass.rename_column('ra', 'ra2mass')
+data2mass.rename_column('dec', 'dec2mass')
+#twomass_names = ['2massid', 'ra2mass', 'dec2mass', '2J', '2H', '2K']
+twomass_names = ['2J', '2H', '2K']
+
+# add 2MASS magnitudes to the atlas object
+mycloud.add_catalog_data(data2mass, names = twomass_names, ra1='ra', dec1='dec', ra2='ra2mass', dec2='dec2mass')
+
+# also add 2mass magnitudes to the ptl array - this makes the light curve calibration easier than doing the calibration directly with the atlas object.
+ptl.add_column(Column(data = np.ones(len(ptl['PID']))*-99999., name='2J'))
+ptl.add_column(Column(data = np.ones(len(ptl['PID']))*-99999., name='2H'))
+ptl.add_column(Column(data = np.ones(len(ptl['PID']))*-99999., name='2K'))
+for i in np.arange(0, len(ptl)):
+    ind = np.where( mycloud['PID'] == ptl[i]['PID'] )[0]
+    if mycloud['2J'][ind]> 0: ptl[i]['2J'] = mycloud['2J'][ind]
+    if mycloud['2H'][ind]> 0: ptl[i]['2H'] = mycloud['2H'][ind]
+    if mycloud['2K'][ind]> 0: ptl[i]['2K'] = mycloud['2K'][ind]
 
 
-# match sources into light curves. matching radius of 0.1 arcsec is good for this.
-# for visual check, uncomment the stuff above - it overplots the positions of the detected sources in each night.
-r_match = 0.1 * 1./3600.
-
-bands = ['H', 'K', 'J']
-
-(ra, dec) = photometry_wcs.coords_from_ds9(input_info.masterregfile)
-p_id = np.arange(0, len(ra))
-
-def make_lcs_from_disk():
-    for b in bands[:]:
-	a1=[]
-	a2=[]
-	a3=[]
-	a4=[]
-	a5=[]
-	a6=[]
-	a7=[]
-	a8=[]
-	a9=[]
-	a10=[]
-	names = ['Pair_ID', 'ra', 'dec', 't', 'H', 'H_err', 'J', 'J_err', 'K', 'K_err']
-	tab = Table([a1, a2, a3, a4, a5, a6, a7, a8, a9, a10], names=names)
-	
-	print b
-	filepath =  input_info.resultfolder + '*YSO*/calibratedmags_' + b.lower() + '.dat' 
-	filelist = glob.glob(filepath)
-	filelist.sort()
-	for i in p_id:
-	    print i
-	    for j in np.arange(0, len(filelist[:])):
-		# find source in calibratedmags file of a given night.
-		a = asciitable.read(filelist[j])
-		# look only at the ones which are near in dec:
-		ind_near = np.where(np.abs(a['DEC'] - dec[i]) <= r_match)[0]
-		# do full distance calculation for those:
-		if len(ind_near) > 0:
-		    distance = np.sqrt((ra[i] - a[ind_near]['RA'])**2 + (dec[i] - a[ind_near]['DEC'])**2)
-		    ind = np.where(distance == distance.min())[0][0]
-		    tab.add_row(np.ones(len(names))*np.nan)
-		    tab[-1]['Pair_ID'] = i
-		    tab[-1]['ra'] = ra[i]
-		    tab[-1]['dec'] = dec[i]
-		    tab[-1]['t'] = a[0]['t'] - 2400000.5 # all lines in a given nightly file have the same time stamp.
-		    tab[-1][b] = a[ind_near[ind]]['P' + b + '_cal']
-		    tab[-1][b + '_err'] = a[ind_near[ind]]['P' + b + '_cal_err_corr']
-	
-	asciitable.write(tab, input_info.resultfolder + b + '_pairitel.csv' )
+# read additional data on YSO classes from catalog if catalog supplied:
+if input_info.catalogfile != '':
+    cat = ascii.read(input_info.catalogfile)
+    # take only the data part from the masked array (this is a workaround because there's a bug with renaming columns for masked arrays in the current astropy version)
+    mycloud.add_catalog_data(cat, names = ['col7'], ra1='ra', dec1='dec', ra2='col2', dec2='col3')
+    print np.where((mycloud['col7'] < 1) & (mycloud['2H']>0) )
 
 
-def make_lcs():
-    for b in bands[:]:
-	a1=[]
-	a2=[]
-	a3=[]
-	a4=[]
-	a5=[]
-	a6=[]
-	a7=[]
-	a8=[]
-	a9=[]
-	a10=[]
-	names = ['Pair_ID', 'ra', 'dec', 't', 'H', 'H_err', 'J', 'J_err', 'K', 'K_err']
-	tab = Table([a1, a2, a3, a4, a5, a6, a7, a8, a9, a10], names=names)
-	print b
-	for i in p_id:
-	    print i
-	
-	    distance = dist_radec_fast(ra[i], dec[i], datadict['data' + b]['RA'], datadict['data' + b]['DEC'], scale = r_match, unit ='deg')
-	    ind = np.where(distance < r_match)[0]
-	    
-	    for i1 in ind:
-	        
-	        tab.add_row(np.ones(len(names))*np.nan)
-		tab[-1]['Pair_ID'] = i
-		tab[-1]['ra'] = ra[i]
-		tab[-1]['dec'] = dec[i]
-		tab[-1]['t'] = datadict['data' + b]['t'][i1] - 2400000.5 # all lines in a given nightly file have the same time stamp.
-		tab[-1][b] = datadict['data' + b]['P' + b + '_cal'][i1]
-		tab[-1][b + '_err'] = datadict['data' + b]['P' + b + '_cal_err_corr'][i1]
-	    
-	asciitable.write(tab, input_info.resultfolder + b + '_pairitel.csv' )
+# fit raw Pairitel magnitudes to 2mass magnitudes using a subset of stars. This set can be:
+# A) all stars with 2mass detections (quite large scatter; systematic error by fit will overestimate real error because there'll be real variables in the fit)
+# B) 2mass detected stars that have been identified as non-members, i.e. probably constant sources. This should yield a quite good error estimate.
+# C) 2mass detected stars which have quite constant light curves and thus serve as "empiric non-YSOs". For this to work, one first needs to do a rough calibration using all stars in order to get calibrated light curves (albeit with too large errors).
 
-# if pairitel_astropy_5.oy has been run before, use this:
-# (it collects the calibrated magnitudes of each night into light curves for each source)
-make_lcs()
+times = np.array(list(set(ptl['t']))) # detour over the list, because sets cannot be transformed directly into np.arrays
 
-# if something has chrashed and the calibrated data needs to be read from hard drive, run this:
-# (it does the same, but takes longer)
-#make_lcs_from_disk()
+# take all sources to fit (in this case all with 2mass data)
+i_ptlsubset = np.where( (ptl['2H']>0) & (ptl['2J']>0) & (ptl['2K']>0) )[0]
+
+
+(ptl, chisq, fiterror) = calibration.do_calibration_for_subset(ptl, times, i_ptlsubset, 'mag_raw', 'mag_raw_err', 'mag_cal1', 'mag_cal1_err')
+
+print('Writing results to disk...')
+ascii.write(ptl, input_info.resultfolder + 'cal1lcs.dat')
+for b in ['j', 'h', 'k']:
+    ind = np.where(ptl['filter'] == b)[0]
+    ascii.write(ptl[ind], input_info.resultfolder + b + '_cal1lcs.dat')
+
+for b in ['j', 'h', 'k']:
+    lc = ascii.read(input_info.resultfolder + b + '_cal1lcs.dat')
+    # find out which columns to use
+    cross_ids = atlas.makecrossids_all(mycloud, lc, 1./3600., ra1 = 'ra', dec1 = 'dec', ra2 = 'ra', dec2 = 'de')
+    mycloud.add_mags(lc, cross_ids, ['mag_cal1','mag_cal1_err','t'], b.upper() + 'cal1')
+
+
+# calculate mean of mycloud:
+print('calculating standard deviation in preliminary light curves...')
+print mycloud['stddev_Hcal1']
+
+plt.clf()
+plt.hist(mycloud['stddev_Hcal1'], bins=50)
+
+

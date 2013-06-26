@@ -5,13 +5,16 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import aplpy
-import pyfits
+import astropy.io.fits as pyfits
 import astropy
 import astropy.io.ascii as asciitable
 from copy import deepcopy
 import glob
 from scipy import optimize
 from astropy.table import Table, Column
+from astropy.wcs import WCS
+from astropy.io import fits
+
 
 
 # this is a dummy iraf header for the output .pst files.
@@ -151,7 +154,7 @@ def read_user_psffile(psfstarfile):
     
     return (ra_psf, dec_psf)
 
-def make_pst_file_from_ds9reg(psfstarfile, magfile, imagefile, outfile):
+def make_pst_file_from_ds9reg_old(psfstarfile, magfile, imagefile, outfile):
     # this writes the data from a user-supplied ds9 region file with stars for PSF fitting in such a format that it looks like an iraf .pst file; this includes the transformation to image coordinates.
     (ra_psf, dec_psf) = read_user_psffile(psfstarfile)
     gc = aplpy.FITSFigure(imagefile)
@@ -206,11 +209,65 @@ def make_pst_file_from_ds9reg(psfstarfile, magfile, imagefile, outfile):
     f.close()
     
 
-#imagefile = '/swiper.real/kpoppen/IR/I20050/output/YSO.38.15/h_long_YSO.38.15_wcs.fits'
-
-#aperture_file = '/swiper.real/kpoppen/IR/I20050/output/YSO.38.15/h_long_YSO.38.15_wcs.fits.mag.1'
 
 
+def make_pst_file_from_ds9reg(psfstarfile, magfile, imagefile, outfile):
+    # this writes the data from a user-supplied ds9 region file with stars for PSF fitting in such a format that it looks like an iraf .pst file; this includes the transformation to image coordinates.
+    (ra_psf, dec_psf) = read_user_psffile(psfstarfile)
+    hdus = fits.open(imagefile)
+    wcs = WCS(hdus[0].header)
+    print imagefile
+    x_psf = deepcopy(ra_psf)
+    y_psf = deepcopy(dec_psf)
+    x_psf, y_psf = wcs.wcs_world2pix(ra_psf, dec_psf, 1)
+    hdus.close()
+    #for i in np.arange(0,len(ra_psf)):
+        #(x_psf[i], y_psf[i]) = gc.world2pixel(ra_psf[i], dec_psf[i])
+    
+    # test if any of those psf stars are outside the actual image (i.e. have x or y coordinates <0):
+    if (x_psf<0).any():
+        bad = np.where(x_psf < 0)[0]
+        x_psf = np.delete(x_psf, bad)
+        y_psf = np.delete(y_psf, bad)
+    if (y_psf<0).any():
+        bad = np.where(y_psf < 0)[0]
+        x_psf = np.delete(x_psf, bad)
+        y_psf = np.delete(y_psf, bad)
+    
+    id_psf = np.zeros(len(x_psf), int)
+    mag_psf = np.zeros(len(x_psf))
+    msky_psf = np.zeros(len(x_psf))
+    apdat = asciitable.read(magfile, Reader=asciitable.Daophot)
+    apdat = apdat._data.data
+    # match the translated coordinates from the ds9 reg file to magnitudes and other values in the .mag file from the master image. This should be easy, because all reasonable PSF fitting stars should have been detected in the aperture photometry.
+    for i in np.arange(0, len(x_psf)):
+	distance = np.sqrt((apdat['XCENTER']-x_psf[i])**2 + (apdat['YCENTER']-y_psf[i])**2)
+	match = np.where(distance == np.min(distance))[0]
+	if distance[match] < 1:
+	    print 'matched successfully.'
+	    id_psf[i] = apdat[match]['ID']
+	    mag_psf[i] = apdat[match]['MAG']
+	    msky_psf[i] = apdat[match]['MSKY']
+    
+    allstuff = zip(mag_psf, id_psf, x_psf, y_psf, msky_psf) # sort by first argument in zip.
+    allstuff.sort()
+    (mag_psf, id_psf, x_psf, y_psf, msky_psf) = zip(*allstuff)
+    
+    # construct output lines which look like in a .pst file...
+    line = []
+    for i in np.arange(0, len(x_psf)):
+	line.append(str(id_psf[i]).ljust(9) + str(x_psf[i])[0:7].ljust(10) + str(y_psf[i])[0:7].ljust(10) + str(mag_psf[i])[0:6].ljust(12) + str(msky_psf[i])[0:10].ljust(10))
+    
+    # ...and write the stuff into the file which will be used for fitting the psf stars.
+    f = open(outfile, 'w')
+    for i in np.arange(0, len(headerpst)):
+        f.write(headerpst[i] + '\n')
+    
+    for i in np.arange(0, len(line)):
+        f.write(line[i] + '\n')
+    
+    f.close()
+    
 
 
 
@@ -348,19 +405,25 @@ def make_mastercoos_for_images(masterimage, masterreg, imagefile, outfile, fanta
     #gc = aplpy.FITSFigure(masterimage)
     x = deepcopy(ra)
     y = deepcopy(dec)
-    #ra = deepcopy(data['XCENTER'])
-    #dec = deepcopy(data['YCENTER'])
-    ## first translate xcenter/ycenter coordinates of mastercoo to wcs:
+    hdus = fits.open(imagefile)
+    wcs = WCS(hdus[0].header)
+    print imagefile
+    x, y = wcs.wcs_world2pix(ra, dec, 1)
+    hdus.close()
+    
+    ##ra = deepcopy(data['XCENTER'])
+    ##dec = deepcopy(data['YCENTER'])
+    ### first translate xcenter/ycenter coordinates of mastercoo to wcs:
+    ##for i in np.arange(0,len(x)):
+	##(ra[i], dec[i]) = gc.pixel2world(data[i]['XCENTER'], data[i]['YCENTER'])
+    
+    ##plt.close()
+    #gc = aplpy.FITSFigure(imagefile)
+    ## then translate ra/dec into x/y coordinates in the imagefile.
     #for i in np.arange(0,len(x)):
-	#(ra[i], dec[i]) = gc.pixel2world(data[i]['XCENTER'], data[i]['YCENTER'])
+	#(x[i], y[i]) = gc.world2pixel(ra[i], dec[i])
     
     #plt.close()
-    gc = aplpy.FITSFigure(imagefile)
-    # then translate ra/dec into x/y coordinates in the imagefile.
-    for i in np.arange(0,len(x)):
-	(x[i], y[i]) = gc.world2pixel(ra[i], dec[i])
-    
-    plt.close()
     # now put it into a coo-like line structure:
     line = []
     for i in np.arange(0, len(data)):

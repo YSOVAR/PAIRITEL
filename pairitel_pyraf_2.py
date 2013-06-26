@@ -5,19 +5,13 @@
 
 # /usr/local/bin/ipython --colors lightbg # use this python because it knows where pyraf is.
 
-#import matplotlib.pyplot as plt
-import pyfits
+import astropy.io.fits as pyfits
 import shutil
 from pyraf import iraf
 import glob
 import os
 import sys
-import asciitable
-#sys.path.append("/data/hguenther/Dropbox/code/python")
-#import atpyextensions
-#sys.path.append("/data/hguenther/Dropbox/code/python/atpy")
-#import atpy
-#from atpyextensions import catalog
+import astropy.io.ascii as ascii
 import numpy as np
 import string
 import pickle
@@ -33,9 +27,9 @@ reload(photometry_both)
 # do psf photometry for master image.
 masterpsffile = input_info.masterimage + '.pstbyhand'
 
-photometry.do_psf_photometry([input_info.masterimage], satmag=input_info.satmag, psfstarfile=masterpsffile)
+threshold_secondrun = 10.
 
-
+photometry.do_psf_photometry([input_info.masterimage], satmag=input_info.satmag, photfilesuffix=input_info.photfilesuffix,psfstarfile=masterpsffile, thresh = threshold_secondrun, psfcleaningradius=input_info.pfscleaningradius)
 
 
 

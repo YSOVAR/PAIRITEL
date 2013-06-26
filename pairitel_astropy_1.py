@@ -2,7 +2,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import aplpy
-import pyfits
+import astropy.io.fits as pyfits
 import astropy
 import astropy.io.ascii as asciitable
 from copy import deepcopy
@@ -10,6 +10,9 @@ import glob
 import os
 from scipy import optimize
 from astropy.table import Table, Column
+from astropy.wcs import WCS
+from astropy.io import fits
+
 
 import input_info
 reload(input_info)
@@ -33,7 +36,7 @@ for i in np.arange(0,len(outlist)):
     outlist[i] = outlist[i] + '.pstbyhand'
 
 # get a list of the results of the aperture photometry (.mag.1 files):
-magpath = input_info.resultfolder + '*YSO*/*_wcs.fits.mag.1' 
+magpath = input_info.resultfolder + '*YSO*/*_wcs.fits.magapphot' 
 maglist=glob.glob(magpath)
 maglist.sort()
 

@@ -14,10 +14,8 @@ import os
 import string
 import shutil
 import sys
-import asciitable
-#import catalog
-#from atpyextensions import catalog
-import pyfits
+import astropy.io.ascii as ascii
+import astropy.io.fits as pyfits
 from copy import deepcopy
 
 paramdir=''
@@ -187,7 +185,10 @@ def set_Pairitel_params():
   iraf.apphot(_doprint=0)
   iraf.datapars.fwhmpsf = 4.5
   iraf.datapars.datamax=15000.
-  iraf.datapars.ccdread=10. # 30. in 2MASS?
+  iraf.centerpars.cbox = 9.0
+  iraf.centerpars.calgorithm = "none"
+  iraf.datapars.datamin = "INDEF"
+  iraf.datapars.ccdread="RDNOISE" # 30. in 2MASS?
   iraf.datapars.gain = "GAIN"
   iraf.datapars.exposure = "EXPTIME"
   iraf.datapars.airmass = "AIRMASS"
@@ -214,7 +215,7 @@ def set_FLWO_params():
 
 
 
-def aperture_photometry(image,threshold=4.,wcs='logical',mode='small', telescope='Pairitel'):
+def aperture_photometry(image,photfilesuffix,threshold=4.,wcs='logical',mode='small', telescope='Pairitel'):
   '''perform aperture photometry on a given image
   
   This procedure perfrom IRAF/DAOPHOT aperture phtometry on (all extensions of) a fits image.
@@ -245,7 +246,7 @@ def aperture_photometry(image,threshold=4.,wcs='logical',mode='small', telescope
   iraf.daophot.wcsout = wcs
   iraf.daophot.wcspsf = wcs
   iraf.centerpars.cbox=2.*iraf.datapars.fwhmpsf
-  iraf.fitskypars.annulus=100 # usuaaly one would use 5.*iraf.datapars.fwhmpsf
+  iraf.fitskypars.annulus=20 # usually one would use 5.*iraf.datapars.fwhmpsf
   #annulus must be wide enough to have good sky statistics
   iraf.fitskypars.dannulus=10. # this is standard
   if 'standard'.find(mode.lower()) != -1 or 'large'.find(mode.lower()) != -1:
@@ -265,12 +266,9 @@ def aperture_photometry(image,threshold=4.,wcs='logical',mode='small', telescope
   iraf.datapars.sigma=skydev      
   #this could be changed to use Stdin and Stdout so that fewer files are written (saves space and time), but for debug purposes better keep all that
   iraf.daofind(image, output='default', verbose=False, verify=False, threshold=threshold) 
-  iraf.daophot.phot(image, coords='default', output='default', verbose=False, verify=False, interactive=False, wcsout=wcs)
+  iraf.daophot.phot(image, coords='default', output=image+photfilesuffix, verbose=False, verify=False, interactive=False, wcsout=wcs)
   # MAG!=INDEF is stronger than PERROR=="NoError", because some stars (those with BigShift have no error, but still INDEF as MAG
   # want to gt rid of thoses as well - they are artifacts on the chip boundary anyway 
-
-    
-###  find transformation coefficients ###
 
 
 
@@ -296,7 +294,47 @@ def ds9_lines(filename, ra1, dec1, ra2, dec2, title):
     file.close()
 
 
-def psf_photometry_pairitel(imagebi, satmag, psfstarfile='', ds9=False):
+def psf_star_fitting_initial(imagebi, psfstarfile,photfilesuffix,satmag):
+    # important: the psf fitting uses the IDs of the stars, looks them up in the given photfile, and uses the coordinates listed there. The coordinates in the pstfile aren't used. This means that, when using hand-selected psf stars, one always has to use the .mag file which was created by the aperture photometry for this (because that's the file which was used by the astropy script to create the .pstbyhand files). Otherwise the stars' IDs are different, and the coordinates of the psf stars will be wrong.
+    if psfstarfile == '':
+        # let iraf select stars for psf fitting.
+        iraf.pstselect(imagebi, 'default', 'default', maxnpsf=10, psfrad=0, fitrad=iraf.daopars.psfrad, Stdout=1)
+        # filter the pst file so that stars which are too bright are deleted. 
+        psf_star_checking(get_last_iraf(imagebi+'.pst'), satmag)
+        # now fit a psf model to the cleaned list of psf stars.
+        iraf.daophot.psf(imagebi,photfile=imagebi+photfilesuffix,pstfile=get_last_iraf(imagebi+'.pst'),psfimage='default',opstfile='default',groupfile='default', interactive=False,verify=False,nclean=10)
+    else:
+        # if a list of psf stars was selected by hand, just load that file and do the psf fitting to those stars without further ado.
+        iraf.daophot.psf(imagebi,photfile=imagebi+photfilesuffix,pstfile=imagebi+'.pstbyhand',psfimage='default',opstfile='default',groupfile='default', interactive=False,verify=False,nclean=10)
+        psf_star_checking(get_last_iraf(imagebi+'.pst'), satmag)
+
+
+def psf_star_fitting_2runs(imagebi, psfstarfile,photfilesuffix,satmag, psfcleaningradius=10.):
+    print '!!!!!!!!!!!!'+str(psfcleaningradius)
+    print "Fitting the PSF model for file: " + imagebi
+    iraf.daophot.verify = False
+    #needs to be set here because it is different for each amplifier
+    sky,skydev=get_sky(imagebi)
+    iraf.datapars.datamin=sky-5*skydev
+    iraf.datapars.sigma=skydev
+    #use a smaller radius for nstar and substar to substract the "core only" of close neighbours
+    original_psfrad=iraf.daopars.psfrad
+    iraf.daopars.psfrad = psfcleaningradius
+    print '!!!!!!!!!!!!'+str(psfcleaningradius)
+    print '!!!!!!!!!!!!'+str(iraf.daopars.psfrad)
+    # get inital list of psf stars (either selected by hand or let iraf select) and make a first-round psf model:
+    psf_star_fitting_initial(imagebi, psfstarfile,photfilesuffix,satmag)
+    # find neighbors of psf stars which are in the fitting radius.
+    iraf.nstar(imagebi,get_last_iraf(imagebi+'.psg'),'default','default','default', verbose = False)
+    # subtract the first-round psf model of those neighboring stars from the psf stars (so that wings of psf stars are star-free).
+    iraf.substar(imagebi,get_last_iraf(imagebi+'.nst'), get_last_iraf(imagebi+'.pst'), get_last_iraf(imagebi+'.psf',suffix='fits'), 'default', verbose=True, Stdout=1)
+    #then reset psfrad to original value
+    iraf.daopars.psfrad = original_psfrad
+    # now get the second-round psf model by fitting the neighbor-subtracted psf stars.
+    iraf.daophot.psf(get_last_iraf(imagebi+'.sub',suffix='fits'), imagebi+photfilesuffix,get_last_iraf(imagebi+'.pst'), get_next_iraf(imagebi+'.psf',suffix='fits'), get_next_iraf(imagebi+'.pst'), get_next_iraf(imagebi+'.psg'), interactive=False,verify=False,nclean=10)
+
+
+def psf_photometry_pairitel(imagebi, satmag, photfilesuffix,psfstarfile='',thresh=6., psfcleaningradius=10.,  ds9=False):
     '''This method performs psf photometry on a single fits extension
     
     It first sets some global daophot parameters, selects psf stars, computes the psf, cleans
@@ -305,50 +343,22 @@ def psf_photometry_pairitel(imagebi, satmag, psfstarfile='', ds9=False):
     
     keyword: ds9=False: If true the method writes a files with X Y coords of all succesfully fitted sources in the current WCS 
     '''
-    print imagebi
-    iraf.daophot.verify = False
-    #needs to be set here because it is different for each amplifier
-    sky,skydev=get_sky(imagebi)
-    iraf.datapars.datamin=sky-5*skydev
-    iraf.datapars.sigma=skydev
-    #bad pixels and image edges are not allowed in fitrad, but generate a warning only in psfrad
-    #to avoid all problems associated with that use fitrad only in the initial selection of psf stars
-    if psfstarfile == '':
-        # let iraf select stars for psf fitting.
-        out=iraf.pstselect(imagebi, 'default', 'default', maxnpsf=10, psfrad=0, fitrad=iraf.daopars.psfrad, Stdout=1)
-        #pstcat=catalog.CartesianCatalog(get_last_iraf(imagebi+'.pst'), type='daophot', RA='XCENTER', DEC='YCENTER')
-        # The following line works because Python short-circuits bolean expressions
-        # If the first is true, then pst cat is [], so it is important that pstcat['MAG'] is not called
-        #print pstcat
-        # filter the pst file so that stars which are too bright are deleted. 
-        psf_star_checking(get_last_iraf(imagebi+'.pst'), satmag)
-        # now fit a psf model to the cleaned list of psf stars.
-        iraf.daophot.psf(imagebi,photfile='default',pstfile=get_last_iraf(imagebi+'.pst'),psfimage='default',opstfile='default',groupfile='default', interactive=False,verify=False,nclean=10)
-    else:
-        # if a list of psf stars was selected by hand, just load that file and do the psf fitting to those stars without further ado.
-        iraf.daophot.psf(imagebi,photfile='default',pstfile=imagebi+'.pstbyhand',psfimage='default',opstfile='default',groupfile='default', interactive=False,verify=False,nclean=10)
-        psf_star_checking(get_last_iraf(imagebi+'.pst'), satmag)
-        
-    #use a smaller radius for nstar and substar to substract the "core only" of close neighbours
-    original_psfrad=iraf.daopars.psfrad
-    iraf.daopars.psfrad = 15
-    # find neighbors of psf stars which are in the fitting radius.
-    iraf.nstar(imagebi,get_last_iraf(imagebi+'.psg'),'default','default','default', verbose = False)
-    # subtract the first-round psf model of those neighboring stars from the psf stars (so that wings of psf stars are star-free).
-    out=iraf.substar(imagebi,get_last_iraf(imagebi+'.nst'), get_last_iraf(imagebi+'.pst'), get_last_iraf(imagebi+'.psf',suffix='fits'), 'default', verbose=True, Stdout=1)
-    #then reset psfrad to original value
-    iraf.daopars.psfrad = original_psfrad
-    # now get the second-round psf model by fitting the neighbor-subtracted psf stars.
-    iraf.daophot.psf(get_last_iraf(imagebi+'.sub',suffix='fits'), get_last_iraf(imagebi+'.mag'),get_last_iraf(imagebi+'.pst'), get_next_iraf(imagebi+'.psf',suffix='fits'), get_next_iraf(imagebi+'.pst'), get_next_iraf(imagebi+'.psg'), interactive=False,verify=False,nclean=10)
-    # now extract all stars using the second-round psf model.
+    # fit the psf (using 2 rounds, i.e. initial psf model + refining the model by subtracting nearby stars in the wings of the psf stars.)
+    psf_star_fitting_2runs(imagebi, psfstarfile,photfilesuffix,satmag, psfcleaningradius)
     
-    iraf.daophot.allstar(imagebi,photfile=get_last_iraf(imagebi+'.mag'),psfimage=get_last_iraf(imagebi+'.psf',suffix='fits'),allstarfile='default',rejfile='default',subimage='default',verbose=False)
+    # now extract all stars using the second-round psf model.
+    iraf.datapars.datamin="INDEF"
+    iraf.daophot.allstar(imagebi,photfile=imagebi+photfilesuffix,psfimage=get_last_iraf(imagebi+'.psf',suffix='fits'),allstarfile='default',rejfile='default',subimage='default',verbose=False)
     
     xycenter_to_ds9reg(get_last_iraf(imagebi+'.als'), 'stars_1.reg')
     
     # take the sub.image (produced as a by-product in the previous step) where all the found sources are subtracted, and find all remaining sources which were so far hidden in the glare of brighter stars.
     # find the sources in the sub.image, using somewhat higher significance threshold so that we don't pick up residuals from the psf subtraction:
-    iraf.daophot.daofind(get_last_iraf(imagebi+'.sub',suffix='fits'),'default',threshold = 6., verbose=False)
+    original_threshold=iraf.findpars.threshold
+    iraf.datapars.datamin="INDEF"
+    iraf.findpars.threshold=thresh
+    iraf.daophot.daofind(get_last_iraf(imagebi+'.sub',suffix='fits'),'default', verbose=False)
+    iraf.findpars.threshold=original_threshold
     # get preliminary magnitudes for those sources, using the original image:
     iraf.daophot.phot(imagebi, coords=get_last_iraf(imagebi+'.sub.2.fits.coo'), output=imagebi+'.secondrun.mag.1', verbose=False, verify=False, interactive=False)
     # now merge the preliminary new sources with the sourcelist from the first round:
@@ -362,46 +372,45 @@ def psf_photometry_pairitel(imagebi, satmag, psfstarfile='', ds9=False):
     xycenter_to_ds9reg(get_last_iraf(imagebi+'.als'), 'stars_2.reg')
 
 
-def psf_photometry_pairitel_with_coo(imagebi, satmag, psfstarfile='', ds9=False):
-    print imagebi
+
+
+#def improve_mastersourcelist_part1(imagebi, satmag, photfilesuffix,psfstarfile='', thresh=6., ds9=False):
+    #iraf.cd(os.path.dirname(imagebi))
+    ## fit the psf.
+    #psf_star_fitting_2runs(imagebi, psfstarfile,photfilesuffix,satmag)
+    ## extract all stars at positions from the current masterfile and subtract those from the image (using the psf model):
+    #iraf.daopars.recenter='no'
+    #iraf.datapars.datamin="INDEF"
+    #iraf.daophot.phot(imagebi,coords=imagebi.replace('.fits','.mastercoo'),output='default',verbose=False)
+    #iraf.daophot.allstar(imagebi,get_last_iraf(imagebi+'.mag'),get_last_iraf(imagebi+'.psf',suffix='fits'),get_next_iraf(imagebi+'.als'),'default','default',verbose=False)
+    ## find stars in the .sub(tracted) image:
+    #original_threshold=iraf.findpars.threshold
+    #iraf.datapars.datamin="INDEF"
+    #iraf.findpars.threshold=thresh
+    #iraf.daophot.daofind(get_last_iraf(imagebi+'.sub',suffix='fits'),'default', verbose=False)
+    #iraf.findpars.threshold=original_threshold
+    ## get preliminary magnitudes for those sources, using the original image:
+    #iraf.daophot.phot(imagebi, coords=get_last_iraf(imagebi+'.sub.2.fits.coo'), output=imagebi+'.secondrun.mag.1', verbose=False, verify=False, interactive=False)
+
+
+
+
+
+
+def psf_photometry_pairitel_with_coo(imagebi, satmag, photfilesuffix,psfstarfile='',thresh=6.,psfcleaningradius=10.,   ds9=False):
     iraf.daophot.verify = False
-    #needs to be set here because it is different for each amplifier
-    sky,skydev=get_sky(imagebi)
-    iraf.datapars.datamin=sky-5*skydev
-    iraf.datapars.sigma=skydev
-    # PSF has to be fitted for each night and band individually.
-    if psfstarfile == '':
-        # let iraf select stars for psf fitting.
-        out=iraf.pstselect(imagebi, 'default', 'default', maxnpsf=10, psfrad=0, fitrad=iraf.daopars.psfrad, Stdout=1)
-        #pstcat=catalog.CartesianCatalog(get_last_iraf(imagebi+'.pst'), type='daophot', RA='XCENTER', DEC='YCENTER')
-        # The following line works because Python short-circuits bolean expressions
-        # If the first is true, then pst cat is [], so it is important that pstcat['MAG'] is not called
-        #print pstcat
-        # filter the pst file so that stars which are too bright are deleted. 
-        psf_star_checking(get_last_iraf(imagebi+'.pst'), satmag)
-        # now fit a psf model to the cleaned list of psf stars.
-        iraf.daophot.psf(imagebi,photfile='default',pstfile=get_last_iraf(imagebi+'.pst'),psfimage='default',opstfile='default',groupfile='default', interactive=False,verify=False,nclean=10)
-    else:
-        # if a list of psf stars was selected by hand, just load that file and do the psf fitting to those stars without further ado.
-        iraf.daophot.psf(imagebi,get_last_iraf(imagebi+'.mag'),pstfile=imagebi+'.pstbyhand',psfimage='default',opstfile='default',groupfile='default', interactive=False,verify=False,nclean=10)
-        psf_star_checking(get_last_iraf(imagebi+'.pst'), satmag)
+    print '!!!!!!!!!!!!'+str(psfcleaningradius)
+    # model psf:
+    psf_star_fitting_2runs(imagebi, psfstarfile,photfilesuffix,satmag,psfcleaningradius )
     
-        #use a smaller radius for nstar and substar to substract the "core only" of close neighbours
-    original_psfrad=iraf.daopars.psfrad
-    iraf.daopars.psfrad = 15
-    # find neighbors of psf stars which are in the fitting radius.
-    iraf.nstar(imagebi,get_last_iraf(imagebi+'.psg'),'default','default','default', verbose = False)
-    # subtract the first-round psf model of those neighboring stars from the psf stars (so that wings of psf stars are star-free).
-    out=iraf.substar(imagebi,get_last_iraf(imagebi+'.nst'), get_last_iraf(imagebi+'.pst'), get_last_iraf(imagebi+'.psf',suffix='fits'), 'default', verbose=True, Stdout=1)
-    #then reset psfrad to original value
-    iraf.daopars.psfrad = original_psfrad
-    # now get the second-round psf model by fitting the neighbor-subtracted psf stars.
-    iraf.daophot.psf(get_last_iraf(imagebi+'.sub',suffix='fits'), get_last_iraf(imagebi+'.mag'),get_last_iraf(imagebi+'.pst'), get_next_iraf(imagebi+'.psf',suffix='fits'), get_next_iraf(imagebi+'.pst'), get_next_iraf(imagebi+'.psg'), interactive=False,verify=False,nclean=10)
+    # now extract all stars using the second-round psf model.
+    iraf.datapars.datamin="INDEF"
     
     ## Using the mastercoo file, all sources are extracted from the known positions, first only as aperture photometry to get initial magnitudes right, then using the individual psfs fitted for that night and band.
-    # Do not shift star positions in these extractions. 
+    # Do not shift star positions in these extractions. This only works if the wcs systems of all images have been very precisely aligned; this should be the case for most of the clusters, because they have a lot of sources per image for the wcs matching.
     iraf.daopars.recenter='no'
     iraf.daophot.phot(imagebi,coords=imagebi.replace('.fits','.mastercoo'),output='default',verbose=False)
+    
     iraf.daophot.allstar(imagebi,get_last_iraf(imagebi+'.mag'),get_last_iraf(imagebi+'.psf',suffix='fits'),get_next_iraf(imagebi+'.als'),'default','default',verbose=False)
     iraf.daopars.recenter='yes'
     
@@ -451,77 +460,10 @@ def deletefrompst(pstfile, deletelist):
     fin.close()
     fout.close()
     
-#def filter_pstfile(pstfile, magfile):
-    #'''Delete stars from pst file, which have neighbours of similar magnitude close by.
-    
-    #This is a test in addition to iraf.pstselect, which sorts out those stars
-    #with brighter neighbours, with bad pixels etc.
-    #'''
-    #pstcat=catalog.CartesianCatalog(pstfile, type='daophot', RA='XCENTER', DEC='YCENTER')
-    #'''It would be simpler to read magfile directly into BaseCatalog, but in some cases the fields get so long
-    #that there is no space in between and asciitable cannot seperate them. txdump on the other hand
-    #actually read the column width from the file and extracts the fields even if they are not separated by spaces.'''
-    #magoutput='IMAGE,ID,XCENTER,YCENTER,XAIRMASS,IFILTER,MAG,MERR,PERROR'
-    #mags=iraf.txdump(magfile,magoutput,'PERROR=="NoError" && MAG!=INDEF && MERR !=INDEF',Stdout=1)
-    #magcat=catalog.CartesianCatalog(mags, type = 'ascii', Reader=asciitable.NoHeaderReader, names = magoutput.split(','), RA='XCENTER', DEC='YCENTER')
-
-    #pstquality = np.zeros(len(pstcat))
-
-    #for source in range(len(pstcat)):
-        #neighbours = magcat.allwithin((pstcat['XCENTER'][source],pstcat['YCENTER'][source]), iraf.daopars.psfrad)
-        #pstquality[source] = judge_pst_quality(neighbours)
-
-    #cutoff = len(pstcat) / 3  # use integers
-    #dellist = (pstcat['ID'][pstquality.argsort()])[:cutoff]
-    
-    ##star special filtering by hand. This is stuff I could not come by automatically
-    #filttab = asciitable.read(os.path.join(paramdir,'filttab.dat'), converters={'str1': asciitable.convert_numpy('str'), 'str2': asciitable.convert_numpy('str')} )
-    ## Go through each line of a table
-    ## This is not ideal but fast to program
-    #for line in filttab:
-        #if (line['str1'] in pstfile) and (line['str2'] in pstfile):
-            #if line['Action'] == 'del':
-                #indexinpstcat = pstcat.coords.NNindex((line['X'],line['Y']), 5)
-                #if indexinpstcat != None:  # It could be None if that object is not in the pstcat for other reasons
-                    #dellist = np.hstack((dellist,pstcat.ID[indexinpstcat]))
-            #elif line['Action'] == 'keep': 
-                #index = np.ones(len(dellist), dtype='bool')
-                #indexinpstcat = pstcat.coords.NNindex((line['X'],line['Y']), 5)
-                #if indexinpstcat != None:  # It could be None if that object is not in the pstcat for other reasons
-                    #index[np.where(dellist == pstcat.ID[indexinpstcat])[0]] = False
-                    #dellist = dellist[index]
-            #elif line['Action'] == 'ignore':
-                #return 0
-            #else:
-                #raise ValueError(os.path.join(paramdir,'filttab.dat')+ ' contains unrecognised instructions')
-    #deletefrompst(pstfile, dellist)
-    #return len(pstcat)-len(dellist)
-
-
-#def judge_pst_quality(pstcat):
-    #'''assign a number for the usability of a star for psf fitting
-    
-    #The function computes a number based on the distance and the magnitude difference 
-    #of the psf star to the brightest neighbour within iraf.daophot.psfrad
-     
-     #A bigger number indicates a better quality, i.e. the star is much brighter 
-     #than all neighbours and the next brightest neighbour is far away.
-    #'''
-    #if len(pstcat) == 0: 
-        #return 0    #source might be in *.mag file, but has been sorted from the catalog before, so it is likely not a good source
-    #else:
-        #if len(pstcat) == 1:
-            #return (30-float(pstcat['MAG'][0])) * 10 #no neighbours, but make brighter stars better
-        #else:
-            #pstcat.sort('MAG')
-            #dist = pstcat.coords.distto((pstcat['XCENTER'][0],pstcat['YCENTER'][0]))
-            #return (float(pstcat['MAG'][1])-float(pstcat['MAG'][0])) * np.sqrt(dist[1])
-
-    
 
 
 
-def do_aperture_photometry(list_files):
+def do_aperture_photometry(list_files, photfilesuffix):
     for datafile in list_files[:]:
         print datafile
         iraf.cd(os.path.dirname(datafile))
@@ -532,88 +474,71 @@ def do_aperture_photometry(list_files):
         for fl in glob.glob(datafile + '.mag.*'):
             os.remove(fl)
         
+        for fl in glob.glob(datafile + photfilesuffix):
+            os.remove(fl)
+
         # extract sources.
-        aperture_photometry(datafile,threshold=4.,wcs='logical',mode='small', telescope='Pairitel')
-        found_sources_to_ds9(datafile + '.coo.1', 'apertureresult' )
+        aperture_photometry(datafile,photfilesuffix, threshold=4.,wcs='logical',mode='small', telescope='Pairitel')
 
 
-def do_psf_photometry(list_files, satmag, psfstarfile=''):
+
+def remove_previous_psfphot_files(filename):
+    # remove old files from previous runs (pst files = psf fitting stars, sub = subtracted images for psf fitting, als and arj = detected sources with psf fitting, nrj and nst = peak finding detections)
+    iraf.cd(os.path.dirname(filename))
+    for fl in glob.glob(filename + '*.pst.*'):
+	os.remove(fl)
+    
+    for fl in glob.glob(filename + '*.sub.*'):
+	os.remove(fl)
+    
+    for fl in glob.glob(filename + '*.als.*'):
+	os.remove(fl)
+    
+    for fl in glob.glob(filename + '*.arj.*'):
+	os.remove(fl)
+    
+    for fl in glob.glob(filename + '*.nst.*'):
+	os.remove(fl)
+    
+    for fl in glob.glob(filename + '*.nrj.*'):
+	os.remove(fl)
+    
+    for fl in glob.glob(filename + '*.psg.*'):
+	os.remove(fl)
+    
+    for fl in glob.glob(filename + '*.psf.*.fits'):
+	os.remove(fl)
+    
+    for fl in glob.glob(filename + '*.secondrun.mag.*'):
+	os.remove(fl)
+    
+    for fl in glob.glob(filename + '*.mag.*'):
+        os.remove(fl)
+
+
+
+
+
+def do_psf_photometry(list_files, satmag, photfilesuffix,psfstarfile='',  thresh=6.,psfcleaningradius=10.):
     for datafile in list_files[:]:
         print datafile
         iraf.cd(os.path.dirname(datafile))
-        # remove old files from previous runs (pst files = psf fitting stars, sub = subtracted images for psf fitting, als and arj = detected sources with psf fitting, nrj and nst = peak finding detections)
+        remove_previous_psfphot_files(datafile)
         # extract sources.
-        for fl in glob.glob(datafile + '.pst.*'):
-            os.remove(fl)
-        
-        for fl in glob.glob(datafile + '.sub.*'):
-            os.remove(fl)
-        
-        for fl in glob.glob(datafile + '.als.*'):
-            os.remove(fl)
-        
-        for fl in glob.glob(datafile + '.arj.*'):
-            os.remove(fl)
-        
-        for fl in glob.glob(datafile + '.nst.*'):
-            os.remove(fl)
-        
-        for fl in glob.glob(datafile + '.nrj.*'):
-            os.remove(fl)
-        
-        for fl in glob.glob(datafile + '.psg.*'):
-            os.remove(fl)
-        
-        for fl in glob.glob(datafile + '.psf.*.fits'):
-            os.remove(fl)
-        
-        for fl in glob.glob(datafile + '.secondrun.mag.*'):
-            os.remove(fl)
-        
-        psf_photometry_pairitel(datafile, satmag, psfstarfile)
-        #found_sources_to_ds9(datafile + '.als.1')
+        psf_photometry_pairitel(datafile, satmag, photfilesuffix,psfstarfile,psfcleaningradius,  thresh)
 
 
-def do_psf_photometry_with_coo(list_files, satmag, psfstarlist=''):
+
+
+def do_psf_photometry_with_coo(list_files, satmag, photfilesuffix,psfstarlist,  thresh=6.,psfcleaningradius=10.):
+    print '!!!!!!!!!!!!'+str(psfcleaningradius)
     for i in np.arange(0, len(list_files)):
-        datafile = list_files[i]
-        print datafile
-        iraf.cd(os.path.dirname(datafile))
-        # remove old files from previous runs (pst files = psf fitting stars, sub = subtracted images for psf fitting, als and arj = detected sources with psf fitting, nrj and nst = peak finding detections)
+        print list_files[i]
+        iraf.cd(os.path.dirname(list_files[i]))
+        remove_previous_psfphot_files(list_files[i])
         # extract sources.
-        for fl in glob.glob(datafile + '.pst.*'):
-            os.remove(fl)
-        
-        for fl in glob.glob(datafile + '.sub.*'):
-            os.remove(fl)
-        
-        for fl in glob.glob(datafile + '.als.*'):
-            os.remove(fl)
-        
-        for fl in glob.glob(datafile + '.arj.*'):
-            os.remove(fl)
-        
-        for fl in glob.glob(datafile + '.nst.*'):
-            os.remove(fl)
-        
-        for fl in glob.glob(datafile + '.nrj.*'):
-            os.remove(fl)
-        
-        for fl in glob.glob(datafile + '.psg.*'):
-            os.remove(fl)
-        
-        for fl in glob.glob(datafile + '.psf.*.fits'):
-            os.remove(fl)
-        
-        for fl in glob.glob(datafile + '.secondrun.mag.*'):
-            os.remove(fl)
-        
-        if (psfstarlist != ''):
-            psf_photometry_pairitel_with_coo(datafile, satmag, psfstarfile=psfstarlist[i])
-        
-        else:
-            psf_photometry_pairitel_with_coo(datafile, satmag)
-
+        psf_photometry_pairitel_with_coo(list_files[i], satmag, photfilesuffix,psfstarlist[i],psfcleaningradius=psfcleaningradius,  thresh=thresh)
+ 
 
 
 
@@ -635,7 +560,7 @@ def correct_coordinates(list_files, radius):
 
 def found_sources_to_ds9(sourcefile, suffix):
     #writes a downloaded 2mass catalog to a ds9 region file.
-    data = asciitable.read(sourcefile, Reader=asciitable.Daophot)
+    data = ascii.read(sourcefile, Reader=ascii.Daophot)
     radius = 1.
     filename = os.path.dirname(sourcefile) + '/' + os.path.basename(sourcefile)[0:6] + '_' + suffix + '_found.reg'
     file=open(filename, 'w')
@@ -651,7 +576,7 @@ def found_sources_to_ds9(sourcefile, suffix):
 
 def twomass_to_ds9(catalogfile):
     #writes a downloaded 2mass catalog to a ds9 region file.
-    data = asciitable.read(catalogfile)
+    data = ascii.read(catalogfile)
     radius = 1.
     file=open(catalogfile.replace('cat','reg'), 'w')
     file.write('# Region file format: DS9 version 4.1\n')
@@ -666,7 +591,7 @@ def twomass_to_ds9(catalogfile):
 
 
 
-def prepare_files(list_files, threshold, min_width, min_height, resultpath):
+def prepare_files(list_files, threshold, min_width, min_height, resultpath, readoutnoise):
     # copies data to output directory, trim data files and mask files to contain only good exposure parts, normalize masks, normalize images by masks. Yields exposure-normalized, trimmed sky images.
     for datafile in list_files[:]:
 	    #prepare directories and copy image to resultpath
@@ -678,6 +603,9 @@ def prepare_files(list_files, threshold, min_width, min_height, resultpath):
 	    print image
 	    shutil.copy(datafile,imagepath)
 	    os.chdir(imagepath)
+	    iraf.cd(imagepath)
+	    # add readoutnoise keyword to header:
+	    iraf.hedit(images=filename, fields="RDNOISE", value=str(readoutnoise), addonly="yes", verify="no")
 	    if 'weight' in filename: # this only works because imlist is sorted and therefore the sky image was already copied to the right directory.
 	        im_sky = image.replace('.weight','')
 	        print "trimming..."
@@ -785,7 +713,7 @@ def psf_star_checking(filename, satmag):
 
 def xycenter_to_ds9reg(daofile, outputname):
     
-    regions = asciitable.read(daofile, Reader=asciitable.Daophot)
+    regions = ascii.read(daofile, Reader=ascii.Daophot)
     radius = 1.
     file=open(outputname, 'w')
     file.write('# Region file format: DS9 version 4.1\n')
@@ -801,8 +729,8 @@ def sort_by_sharpness(datalist, nbest):
     sharpnesses = np.zeros(len(datalist))
     n_found = np.zeros(len(datalist))
     for i in np.arange(0,len(datalist)):
-        sharpnesses[i] = np.median(asciitable.read(datalist[i], Reader=asciitable.Daophot, fill_values=[('INDEF'), (np.nan)])['SHARPNESS'])
-        n_found[i] = len(asciitable.read(datalist[i], Reader=asciitable.Daophot, fill_values=[('INDEF'), (np.nan)]))
+        sharpnesses[i] = np.median(ascii.read(datalist[i], Reader=ascii.Daophot, fill_values=[('INDEF'), (np.nan)])['SHARPNESS'])
+        n_found[i] = len(ascii.read(datalist[i], Reader=ascii.Daophot, fill_values=[('INDEF'), (np.nan)]))
     
     allstuff = zip(sharpnesses, datalist, n_found) # sort by first argument in zip.
     allstuff.sort()

@@ -2,7 +2,7 @@
 # this containes routines that are used by both the pyraf and the astropy scripts.
 
 import glob
-import pyfits
+import astropy.io.fits as pyfits
 import numpy as np
 import input_info
 

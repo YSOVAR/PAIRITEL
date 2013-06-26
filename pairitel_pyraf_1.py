@@ -5,19 +5,13 @@
 
 # start /usr/local/bin/ipython --colors lightbg # use this python because it knows where pyraf is.
 
-#import matplotlib.pyplot as plt
-import pyfits
+import astropy.io.fits as pyfits
 import shutil
 from pyraf import iraf
 import glob
 import os
 import sys
-import asciitable
-#sys.path.append("/data/hguenther/Dropbox/code/python")
-#import atpyextensions
-#sys.path.append("/data/hguenther/Dropbox/code/python/atpy")
-#import atpy
-#from atpyextensions import catalog
+import astropy.io.ascii as ascii
 import numpy as np
 import string
 import pickle
@@ -37,7 +31,7 @@ extractlist = glob.glob(datapath_extractsources)
 extractlist.sort()
 
 # perform aperture photometry on those images; found sources are also saved as a ds9 region file for checking by eye.
-photometry.do_aperture_photometry(extractlist)
+photometry.do_aperture_photometry(extractlist, input_info.photfilesuffix)
 
 #check images for best sharpness.
 datapath = input_info.resultfolder + '*YSO*/*_wcs.fits.coo.1'
