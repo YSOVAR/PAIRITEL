@@ -268,6 +268,10 @@ def make_pst_file_from_ds9reg(psfstarfile, magfile, imagefile, outfile):
     
     f.close()
     
+    # check how many stars were actually matched (the ones that weren't matched have "0" as magnitude):
+    #print mag_psf
+    n_matched = len(np.where(np.array(mag_psf) != 0)[0])
+    return n_matched
 
 
 

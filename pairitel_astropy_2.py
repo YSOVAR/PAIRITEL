@@ -25,7 +25,11 @@ fantasymag = 20.
 inpath = input_info.resultfolder + '*YSO*/*_wcs.fits' 
 imlist=glob.glob(inpath)
 imlist.sort()
-#imlist.remove(input_info.masterimage)
+badlist = photometry_both.make_badlist(imlist)
+if input_info.bad_files_exist == "yes":
+    for b in input_info.bad_exposures: badlist.append(b)
+
+imlist = photometry_both.sanitycheck(imlist, badlist)
 
 # make list of filenames for the output files:
 outlist = deepcopy(imlist)

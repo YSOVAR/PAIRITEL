@@ -24,6 +24,11 @@ reload(photometry)
 import photometry_both
 reload(photometry_both)
 
+iraf.noao()
+iraf.digiphot()
+iraf.daophot()
+
+
 # do psf photometry for master image.
 masterpsffile = input_info.masterimage + '.pstbyhand'
 

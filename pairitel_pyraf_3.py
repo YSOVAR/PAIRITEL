@@ -29,13 +29,17 @@ reload(photometry_both)
 inpath = input_info.resultfolder + '*YSO*/*_wcs.fits' 
 imlist=glob.glob(inpath)
 imlist.sort()
-#imlist.remove(input_info.masterimage)
+badlist = photometry_both.make_badlist(imlist)
+if input_info.bad_files_exist == "yes":
+    for b in input_info.bad_exposures: badlist.append(b)
+
+imlist = photometry_both.sanitycheck(imlist, badlist)
 
 # get list of all psf star files:
-pstpath = input_info.resultfolder + '*YSO*/*_wcs.fits.pstbyhand' 
-pstlist=glob.glob(pstpath)
-pstlist.sort()
-#pstlist.remove(input_info.masterimage + '.pstbyhand')
+pstlist = deepcopy(imlist)
+for i in np.arange(0, len(imlist)):
+    pstlist[i] = imlist[i].replace('_wcs.fits', '_wcs.fits.pstbyhand')
+
 
 photometry.do_psf_photometry_with_coo(imlist[:], satmag=input_info.satmag,photfilesuffix=input_info.photfilesuffix, psfstarlist=pstlist[:], psfcleaningradius=input_info.pfscleaningradius)
 

@@ -16,7 +16,7 @@ from YSOVAR import atlas
 from YSOVAR.great_circle_dist import dist_radec, dist_radec_fast
 from astropy.wcs import WCS
 from astropy.io import fits
-
+import random
 
 import urllib
 import StringIO
@@ -81,12 +81,12 @@ for i in np.arange(0, len(mycloud)):
 ind = np.where( (mycloud['mean_Hcal2'] < 15))[0]
 
 if len(ind) > 0:
-    ind = random.sample(ind, 1)[0]
+    i = random.sample(ind, 1)[0]
     plt.clf()
-    plt.errorbar(mycloud[ind].lclist[0]['tJcal2'], mycloud[ind].lclist[0]['mJcal2'], yerr = mycloud[ind].lclist[0]['mJcal2_error'], fmt='.-', capsize=0 )
-    plt.errorbar(mycloud[ind].lclist[0]['tHcal2'], mycloud[ind].lclist[0]['mHcal2'], yerr = mycloud[ind].lclist[0]['mHcal2_error'], fmt='.-', capsize=0  )
-    plt.errorbar(mycloud[ind].lclist[0]['tKcal2'], mycloud[ind].lclist[0]['mKcal2'], yerr = mycloud[ind].lclist[0]['mKcal2_error'], fmt='.-', capsize=0  )
-    plt.title('a sample source from your cluster (' + str(ind) + ')')
+    plt.errorbar(mycloud[i].lclist[0]['tJcal2'], mycloud[i].lclist[0]['mJcal2'], yerr = mycloud[i].lclist[0]['mJcal2_error'], fmt='.-', capsize=0 )
+    plt.errorbar(mycloud[i].lclist[0]['tHcal2'], mycloud[i].lclist[0]['mHcal2'], yerr = mycloud[i].lclist[0]['mHcal2_error'], fmt='.-', capsize=0  )
+    plt.errorbar(mycloud[i].lclist[0]['tKcal2'], mycloud[i].lclist[0]['mKcal2'], yerr = mycloud[i].lclist[0]['mKcal2_error'], fmt='.-', capsize=0  )
+    plt.title('a sample source from your cluster (' + str(i) + ')')
     plt.xlabel('t (MJD)')
     plt.ylabel('mag')
     plt.legend(['J', 'H', 'K'], 'best')

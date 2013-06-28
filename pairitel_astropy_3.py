@@ -25,7 +25,7 @@ reload(photometry_both)
 ra = input_info.ra_cluster
 dec = input_info.dec_cluster
 radius = 30.
-minmag = 15.
+minmag = 16.
 
 data=urllib.urlopen('http://archive.tuc.noao.edu/cgi-bin/scat?catalog=tmc&ra='+str(ra)+'&dec='+str(dec)+'&sys=J2000&mrad='+str(radius)+'&nstar=-1&mag='+str(minmag)).read()
 
@@ -58,7 +58,8 @@ for i in np.arange(0, len(data)):
     line = data[i].split('\t')
     id2m[i] = line[0]
     ra2m[i] = float(line[1].split(':')[0])*15 + float(line[1].split(':')[1])*15/60. + float(line[1].split(':')[2])*15/3600.
-    dec2m[i] = float(line[2].split(':')[0]) + float(line[2].split(':')[1])/60. + float(line[2].split(':')[2])/3600.
+    dec2m[i] = np.abs(float(line[2].split(':')[0])) + float(line[2].split(':')[1])/60. + float(line[2].split(':')[2])/3600.
+    if float(line[2].split(':')[0]) < 0: dec2m[i] = dec2m[i]*-1
     j2m[i] = float(line[3])
     h2m[i] = float(line[4])
     k2m[i] = float(line[5])

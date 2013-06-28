@@ -144,7 +144,6 @@ def correct_wcs(image,clobber=False,minmag=13, radius=20.):
   image = filename
   clobber = overwrite existing 2MASS catalog file?
   minmag = mag of faintest object retrieved from 2MASS'''
-  iraf.mscred(_doprint=0)
   object = iraf.hselect(image+'[0]','OBJECT', 'yes', Stdout=1)[0]
   filter = iraf.hselect(image+'[0]','FILTER', 'yes', Stdout=1)[0]
   catalogue=os.path.join(os.path.dirname(image),"2mass_"+str(object)+'_'+str(filter)+'_'+str(minmag)+".cat")
@@ -153,7 +152,10 @@ def correct_wcs(image,clobber=False,minmag=13, radius=20.):
     get_catalogue(catalogue,iraf.hselect(image+'[0]','RA','yes', Stdout=1)[0],iraf.hselect(image+'[0]','DEC','yes', Stdout=1)[0], radius=radius, minmag=minmag)
   #cfrac: maximum fraction of targets which do not center correctly
   #       a large number is no problem here, since often there are a few 100 sources in the catalog to match.
-  matchout=iraf.msccmatch(image,catalogue,interactive=False, Stdout=1,cfrac=0.95,rms=3)
+  iraf.mscred(_doprint=0)
+  #matchout=iraf.msccmatch(image,catalogue,interactive=False, Stdout=1,cfrac=0.95,rms=3)
+  iraf.cd(os.path.dirname(image))
+  matchout=iraf.msccmatch(os.path.basename(image),catalogue,interactive=False, Stdout=1,cfrac=0.9,rms=10,maxshif=100., nsearch=100, nfit=5, update='yes')
   try: print matchout[-5]
   except IndexError: print matchout
 
@@ -543,18 +545,14 @@ def do_psf_photometry_with_coo(list_files, satmag, photfilesuffix,psfstarlist,  
 
 
 
-def correct_coordinates(list_files, radius):
+def correct_coordinates(list_files, radius, twomassmag=15.):
     # makes a copy of the original file and corrects the coordinates of the copies, using the 2MASS catalogue.
-    for datafile in list_files[:]:
-        print datafile
-        print datafile.replace('.fits', '_wcs.fits')
-        image = datafile.replace('_coadd_normed.fits', '_wcs.fits')
-        shutil.copy(datafile,datafile.replace('_coadd_normed.fits', '_wcs.fits'))
-        minmag = 15
+    for image in list_files[:]:
         object=iraf.hselect(image+'[0]','OBJECT', 'yes', Stdout=1)[0]
         filter = iraf.hselect(image+'[0]','FILTER', 'yes', Stdout=1)[0]
-        catalogue=os.path.join(os.path.dirname(image),"2mass_"+str(object)+'_'+str(filter)+'_'+str(minmag)+".cat")
-        correct_wcs(datafile.replace('_coadd_normed.fits', '_wcs.fits'), clobber=True, radius=radius, minmag=minmag)
+        catalogue=os.path.join(os.path.dirname(image),"2mass_"+str(object)+'_'+str(filter)+'_'+str(twomassmag)+".cat")
+        print catalogue
+        correct_wcs(image, clobber=True, radius=radius, minmag=twomassmag)
         twomass_to_ds9(catalogue)
 
 
@@ -591,7 +589,33 @@ def twomass_to_ds9(catalogfile):
 
 
 
-def prepare_files(list_files, threshold, min_width, min_height, resultpath, readoutnoise):
+#def prepare_files(list_files, threshold, min_width, min_height, resultpath, readoutnoise):
+    ## copies data to output directory, trim data files and mask files to contain only good exposure parts, normalize masks, normalize images by masks. Yields exposure-normalized, trimmed sky images.
+    #for datafile in list_files[:]:
+	    ##prepare directories and copy image to resultpath
+	    #filename=os.path.basename(datafile)
+	    #obsid=os.path.basename(os.path.dirname(datafile))
+	    #imagepath=os.path.join(resultpath,obsid)
+	    #image=os.path.join(imagepath,filename)
+	    #if not os.access(imagepath,os.F_OK): os.makedirs(imagepath)
+	    #print image
+	    #shutil.copy(datafile,imagepath)
+	    #os.chdir(imagepath)
+	    #iraf.cd(imagepath)
+	    ## add readoutnoise keyword to header:
+	    #iraf.hedit(images=filename, fields="RDNOISE", value=str(readoutnoise), addonly="yes", verify="no")
+	    #if 'weight' in filename: # this only works because imlist is sorted and therefore the sky image was already copied to the right directory.
+	        #im_sky = image.replace('.weight','')
+	        #print "trimming..."
+                #apply_rectangle_mask(im_sky, image, threshold, min_width, min_height)
+                #print "normalizing mask..."
+	        #mask_norm(image.replace('.fits', '_trimmed.fits'))
+	        #print "applying mask..."
+	        #divide_by_mask(im_sky.replace('.fits', '_trimmed.fits'), image.replace('.fits', '_normed.fits'))
+
+
+
+def prepare_files(list_files, resultpath, readoutnoise):
     # copies data to output directory, trim data files and mask files to contain only good exposure parts, normalize masks, normalize images by masks. Yields exposure-normalized, trimmed sky images.
     for datafile in list_files[:]:
 	    #prepare directories and copy image to resultpath
@@ -606,15 +630,6 @@ def prepare_files(list_files, threshold, min_width, min_height, resultpath, read
 	    iraf.cd(imagepath)
 	    # add readoutnoise keyword to header:
 	    iraf.hedit(images=filename, fields="RDNOISE", value=str(readoutnoise), addonly="yes", verify="no")
-	    if 'weight' in filename: # this only works because imlist is sorted and therefore the sky image was already copied to the right directory.
-	        im_sky = image.replace('.weight','')
-	        print "trimming..."
-                apply_rectangle_mask(im_sky, image, threshold, min_width, min_height)
-                print "normalizing mask..."
-	        mask_norm(image.replace('.fits', '_trimmed.fits'))
-	        print "applying mask..."
-	        divide_by_mask(im_sky.replace('.fits', '_trimmed.fits'), image.replace('.fits', '_normed.fits'))
-	        #photometry.correct_wcs(im_sky.replace('_trimmed.fits', '') + '_normed.fits')
 
 
 
@@ -664,19 +679,20 @@ def mask_norm(mask):
     # normalizes mask.
     # test if trimmed mask exists:
     if os.path.isfile(mask):
+        iraf.cd(os.path.dirname(mask))
 	hdulist = pyfits.open(mask)
 	imdata = hdulist[0].data
 	hdulist.close()
 	outname = mask.replace('_trimmed.fits', '_normed.fits')
 	print imdata.max()
-	iraf.imarith(mask,"/",imdata.max(),outname)
+	iraf.imarith(os.path.basename(mask),"/",imdata.max(),os.path.basename(outname))
 
 
 def divide_by_mask(image, mask):
     # divides trimmed image by trimmed and normed mask.
     # test if trimmed image and trimmed+normed mask exist:
     if (os.path.isfile(mask)) & (os.path.isfile(image)):
-	outname = image.replace('_trimmed.fits', '_normed.fits')
+	outname = image.replace('_unnormed_trimmed.fits', '.fits')
 	iraf.imarith(image,"/",mask,outname)
 
 
@@ -725,12 +741,13 @@ def xycenter_to_ds9reg(daofile, outputname):
     
     file.close()
 
-def sort_by_sharpness(datalist, nbest):
+def sort_by_apertphotresults(datalist, nbest):
     sharpnesses = np.zeros(len(datalist))
     n_found = np.zeros(len(datalist))
     for i in np.arange(0,len(datalist)):
-        sharpnesses[i] = np.median(ascii.read(datalist[i], Reader=ascii.Daophot, fill_values=[('INDEF'), (np.nan)])['SHARPNESS'])
-        n_found[i] = len(ascii.read(datalist[i], Reader=ascii.Daophot, fill_values=[('INDEF'), (np.nan)]))
+        print i
+        sharpnesses[i] = np.median(ascii.read(datalist[i], Reader=ascii.Daophot, fill_values=[('INDEF', np.nan)])['SHARPNESS'])
+        n_found[i] = len(ascii.read(datalist[i], Reader=ascii.Daophot, fill_values=[('INDEF', np.nan)]))
     
     allstuff = zip(sharpnesses, datalist, n_found) # sort by first argument in zip.
     allstuff.sort()

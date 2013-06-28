@@ -38,11 +38,11 @@ datapath = input_info.resultfolder + '*YSO*/*_wcs.fits.coo.1'
 datalist = glob.glob(datapath)
 datalist.sort()
 
-(sharpnesses, bestfiles, bestsharps, mostfiles, stars_found) = photometry.sort_by_sharpness(datalist, nbest=8)
-
-print 'These are the sharpest images.\n'
-for b in bestfiles: print b[0:-6]
-for s in bestsharps: print s
+(sharpnesses, bestfiles, bestsharps, mostfiles, stars_found) = photometry.sort_by_apertphotresults(datalist, nbest=8)
+ 
+#print 'These are the sharpest images.\n'
+#for b in bestfiles: print b[0:-6]
+#for s in bestsharps: print s
 
 print 'These are the images in which the most stars were found.\n'
 for b in mostfiles: print b[0:-6]

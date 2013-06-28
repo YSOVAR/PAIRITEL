@@ -30,21 +30,31 @@ badlist = photometry_both.make_badlist(imlist)
 # this should be empty because only the good nights should have been copied to the resultfolder.
 print badlist
 
+if input_info.bad_files_exist == "yes":
+    for b in input_info.bad_exposures: badlist.append(b)
+
+imlist = photometry_both.sanitycheck(imlist, badlist)
+
 # create the filenames for the individual PSF star files
 outlist = deepcopy(imlist)
 for i in np.arange(0,len(outlist)):
     outlist[i] = outlist[i] + '.pstbyhand'
 
 # get a list of the results of the aperture photometry (.mag.1 files):
-magpath = input_info.resultfolder + '*YSO*/*_wcs.fits.magapphot' 
-maglist=glob.glob(magpath)
-maglist.sort()
+maglist = deepcopy(imlist)
+for i in np.arange(0, len(maglist)): maglist[i] = imlist[i].replace('_wcs.fits', '_wcs.fits'+input_info.photfilesuffix)
 
+n_matched = np.ones(len(imlist),int)*-99999.
 # now do the actual conversion of the psf star list to image coordinates for each observation.
 for i in np.arange(0, len(imlist)):
-    photometry_wcs.make_pst_file_from_ds9reg(input_info.psfstarfile, maglist[i], imlist[i], outlist[i])
+#for i in np.arange(0, 1):
+    n_matched[i] = photometry_wcs.make_pst_file_from_ds9reg(input_info.psfstarfile, maglist[i], imlist[i], outlist[i])
     plt.close()
 
+
+print('Include these files in your "bad_exposures": ')
+for n in np.where(n_matched == 0)[0]:
+    print(str(imlist[n]))
 
 
 
