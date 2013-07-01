@@ -81,16 +81,6 @@ bad_exposures = [resultfolder + 'YSO.47.14/k_long_YSO.47.14_wcs.fits', resultfol
 # after running the psf photometry, save aa DS9 region file with the detected sources in the masterimage (see PAIRITEL_RAEDME.txt). Do not change the following line.
 masterregfile = resultfolder + 'masterstars.reg'
 
-# provide a catalogue file name here that is readable by astropy.io.ascii (for example a standard electronic data table from a paper) which lists the class 1 and class 2 objects in your cluster. This can be from Rob's paper, for example. 
-# if no catclogue exists, put catalogfile = ''
-catalogfile = ''
-# define what the columns containing RA, DEC, and YSO-class are named in that file:
-rakeyword = 'col2'
-deckeyword = 'col3'
-classkeyword = 'col7'
-# and define what kind of idenitifiers the non-YSO sources have in the YSO-class column:
-list_of_nonyso_values = ['-1', '0']
-
 # provide a threshold for the preliminarily calibrated light curves. Sources with a 
 threshold_lc = 0.15
 

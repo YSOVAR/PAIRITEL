@@ -1,24 +1,16 @@
 # -*- coding: utf-8 -*-
 import numpy as np
 import matplotlib.pyplot as plt
-import aplpy
-import astropy.io.fits as pyfits
 import astropy
 import astropy.io.ascii as ascii
 from copy import deepcopy
-import glob
-import os
 from scipy import optimize
 from astropy.table import Table, Column
 import sys
 import YSOVAR
 from YSOVAR import atlas
-from YSOVAR.great_circle_dist import dist_radec, dist_radec_fast
-from astropy.wcs import WCS
-from astropy.io import fits
 import random
 
-import urllib
 import StringIO
 
 import input_info

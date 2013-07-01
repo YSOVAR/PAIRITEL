@@ -204,25 +204,24 @@ input_info.resultfolder + 'rawlcs.dat'
 
 Step 15
 
+This script uses the infrastructure provided by the pYSOVAR package; the uncalibrated light curves are transformed into an atlas object which adds some nice functionalities the script will use.
+The matching 2MASS magnitudes are found for sources which have 2MASS counterparts. 
+In this step, all sources with 2MASS counterparts are used for the calibration. All magnitudes are shifted linearly to the 2MASS magnitudes, and the standard deviation of (Pairitel_calibarted - 2MASS) is added to the photometric errors as the systematic error induced by the fit. This will overestimate the true errors: In this fit, there will be intrinsically variable sources which induce a large scatter. 
+
 DO THIS:
 - Run 'pairitel_astropy_5.py' in the astropy shell.
 execfile('/pathtofile/pairitel_astropy_5.py')
-
-This script uses the infrastructure provided by the pYSOVAR package; the uncalibrated light curves are transformed into an atlas object which adds some nice functionalities the script will use.
-The matching 2MASS magnitudes are found for sources which have 2MASS counterparts. 
-If the user has supplied a catalog file which lists class 1 and class 2 sources, those identifiers are also added (see catalogfile etc. in input_info.py). 
-The calibrated the Pairitel data to the 2mass data in two steps:
-1. All sources with 2MASS counterparts are used. All magnitudes are shifted linearly to the 2MASS amgnitudes, and the standard deviation of (Pairitel_calibarted - 2MASS) is added to the photometric errors as the systematic error induced by the fit. This will overestimate the true errors: In this fit, there will be intrinsically variable sources which induce a large scatter. 
-
-There will be a figure displayed which shows a histogram of the scatter of the now calibrated light curves. Choose a threshold from this; you want mostly contant light curves for the second step of the calibration. But you also want to choose enough quasi-constant sources to make a meaningful fit, so go for something slightly to the left of the peak. Put this value into input_info.py (threshold_lc).
+- Look at the last output figure. It is a histogram of the standard deviation of the first-round calibration light curves. You  want to identify the light curves which are mostly contant, i.e. have a low standrad deviation:
+- pick a threshold, somewhere near the peak of the histogram.
+- put that value into input_info.py (line "threshold_lc").
 
 
-Step 11
+Step 16
 
-Run 'pairitel_astropy_6.py' in the astropy shell.
+This step re-does the calibration, using only mostly constant sources. This will yield a better fit and a smaller systematic error introduced by the fit. The script will also display a random light curve from your cluster.
 
-This performs the second round of calibration to the 2MASS data:
-2. The script looks at all calibrated light curves created in the previous step, takes the ones which are less variable than the user-defined threshold, and re-calibrates the Pairitel data using only those (mostly non-variable) objects. Then the scatter will be much smaller, but still somewhat over-estimated because some of the calibration sources may still have some low-level intrinsic variability.
+- Run 'pairitel_astropy_6.py' in the astropy shell.
+execfile('/pathtofile/pairitel_astropy_6.py')
 
 
 

@@ -68,18 +68,17 @@ for i in np.arange(0, len(ptl)):
     if mycloud['2K'][ind]> 0: ptl[i]['2K'] = mycloud['2K'][ind]
 
 
-# read additional data on YSO classes from catalog if catalog supplied:
-if input_info.catalogfile != '':
-    cat = ascii.read(input_info.catalogfile)
-    # take only the data part from the masked array (this is a workaround because there's a bug with renaming columns for masked arrays in the current astropy version)
-    mycloud.add_catalog_data(cat, names = ['col7'], ra1='ra', dec1='dec', ra2='col2', dec2='col3')
-    print np.where((mycloud['col7'] < 1) & (mycloud['2H']>0) )
+## read additional data on YSO classes from catalog if catalog supplied:
+#if input_info.catalogfile != '':
+    #cat = ascii.read(input_info.catalogfile)
+    ## take only the data part from the masked array (this is a workaround because there's a bug with renaming columns for masked arrays in the current astropy version)
+    #mycloud.add_catalog_data(cat, names = ['col7'], ra1='ra', dec1='dec', ra2='col2', dec2='col3')
+    #print np.where((mycloud['col7'] < 1) & (mycloud['2H']>0) )
 
 
 # fit raw Pairitel magnitudes to 2mass magnitudes using a subset of stars. This set can be:
 # A) all stars with 2mass detections (quite large scatter; systematic error by fit will overestimate real error because there'll be real variables in the fit)
-# B) 2mass detected stars that have been identified as non-members, i.e. probably constant sources. This should yield a quite good error estimate.
-# C) 2mass detected stars which have quite constant light curves and thus serve as "empiric non-YSOs". For this to work, one first needs to do a rough calibration using all stars in order to get calibrated light curves (albeit with too large errors).
+# B) 2mass detected stars which have quite constant light curves and thus serve as "empiric non-YSOs". For this to work, one first needs to do a rough calibration using all stars in order to get calibrated light curves (albeit with too large errors).
 
 times = np.array(list(set(ptl['t']))) # detour over the list, because sets cannot be transformed directly into np.arrays
 
@@ -108,5 +107,6 @@ print mycloud['stddev_Hcal1']
 
 plt.clf()
 plt.hist(mycloud['stddev_Hcal1'], bins=50)
+plt.xlabel('standard deviation of H band light curves')
 
 
