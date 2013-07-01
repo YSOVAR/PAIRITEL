@@ -114,7 +114,7 @@ Step 8
 This script translates the psfstar.reg region file into a pixel position table for the masterfile observation (IRAF needs X/Y coordinates for the next step.)
 
 DO THIS:
-- Type "import astropy", "import aplpy", and "import matplotlib.pyplot as plt" into the pyraf shell. If it doesn't complain, proceed with this shell. If it complains, open a new ipython shell and proceed with that shell (which will be called "astropy shell" from now on.)
+- Type "import astropy" and "import matplotlib.pyplot as plt" into the pyraf shell. If it doesn't complain, proceed with this shell. If it complains, open a new ipython shell and proceed with that shell (which will be called "astropy shell" from now on.)
 - Execute the pairitel_astropy_1.py script.
 execfile('/pathtofile/pairitel_astropy_1.py')
 - It is possible that this script crashes at some point. If it does, look at the shell output which will tell you with which *_wcs.fits file it crashed. Look at that file with ds9. You either did not define enough psf stars so that none are found for this image; if that's the case, just add more psf stars to the psfstars.reg file, save it, and run pairitel_astropy_1.py again. Other possibility: that image is so small that it does not make sense to reduce it at all. If that's the case, go to input_info.py, set "bad_files_exist" to "yes" and put the filename into "bad_exposures" as shown. Repeat Step 8. If it crashed at a different file, repeat these repair steps until Step 8 runs without problems.
