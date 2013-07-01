@@ -1,0 +1,7 @@
+ra_good   dec_good   x_pixel    y_pixel   beyond_saving   filename_incl_path
+92.70983  -6.1887611 221.879    430.990   no              /swiper.real/kpoppen/IR/GD1215/output/YSO.47.18/h_long_YSO.47.18_wcs_unnormed.fits
+92.70983  -6.1887611 223.931    430.675   no              /swiper.real/kpoppen/IR/GD1215/output/YSO.47.18/j_long_YSO.47.18_wcs_unnormed.fits
+92.70983  -6.1887611 0.0        0.0       yes             /swiper.real/kpoppen/IR/GD1215/output/YSO.47.18/k_long_YSO.47.18_wcs_unnormed.fits
+92.70983  -6.1887611 485.697    276.220   no              /swiper.real/kpoppen/IR/GD1215/output/YSO.48.12/h_long_YSO.48.12_wcs_unnormed.fits
+92.70983  -6.1887611 488.532    281.044   no              /swiper.real/kpoppen/IR/GD1215/output/YSO.48.12/k_long_YSO.48.12_wcs_unnormed.fits
+92.70983  -6.1887611 0.0        0.0       yes             /swiper.real/kpoppen/IR/GD1215/output/YSO.48.13/k_long_YSO.48.13_wcs_unnormed.fits
