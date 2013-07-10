@@ -3,6 +3,8 @@ Recipe for Pairitel data reduction
 
 At CfA, I have to use two different python shells because Astropy and Pyraf cannot be loaded in the same python shell. If you can load both pyraf and astropy in the same shell on your system, just run all the scripts from the same shell.
 
+NOTE: If your pyraf shell crashes completely at some point, or there was a power outage or whatnot, open a new pyraf shell, run the script "run_this_if_your_pyraf_shell_has_crashed.py" and then carry on with whatever script you were running before the crash.
+
 Step 1
 
 Rename some files and provide some basic information about the paths where your data is and some info about your cluster.
