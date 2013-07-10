@@ -83,7 +83,7 @@ In this step, the coordinate shifts performed on the images are also applied to 
 DO THIS:
 - in the pyraf shell, run the pairitel_pyraf_0d.py script
 execfile('/pathtofile/pairitel_pyraf_0d.py')
-- If you get weird errors like "xxx not an image or a number", close python, open a new shell in yout home directory, start a fresh ipython there and run this script again. (This is a strange IRAF problem with some of the IRAF versions.)
+- If you get weird errors like "xxx not an image or a number", close python, open a new shell in your home directory, start a fresh ipython there and run this script again. (This is a strange IRAF problem with some of the IRAF versions.)
 
 
 Step 6
@@ -119,8 +119,9 @@ DO THIS:
 - Type "import astropy" and "import matplotlib.pyplot as plt" into the pyraf shell. If it doesn't complain, proceed with this shell. If it complains, open a new ipython shell and proceed with that shell (which will be called "astropy shell" from now on.)
 - Execute the pairitel_astropy_1.py script.
 execfile('/pathtofile/pairitel_astropy_1.py')
-- It is possible that this script crashes at some point. If it does, look at the shell output which will tell you with which *_wcs.fits file it crashed. Look at that file with ds9. You either did not define enough psf stars so that none are found for this image; if that's the case, just add more psf stars to the psfstars.reg file, save it, and run pairitel_astropy_1.py again. Other possibility: that image is so small that it does not make sense to reduce it at all. If that's the case, go to input_info.py, set "bad_files_exist" to "yes" and put the filename into "bad_exposures" as shown. Repeat Step 8. If it crashed at a different file, repeat these repair steps until Step 8 runs without problems.
-- After running successfully, the script also gives you output in the shell about other files that you should add to the "bad_exposures", even if they did not cause the script to crash.
+- After running successfully, the script gives you output in the shell about files that are bad exposures and should not be reduced. If you see such filenames, go to input_info.py, set "bad_files_exist" to "yes" and put the filename into "bad_exposures" as shown.
+
+IF THIS SCRIPT CRASHES:  It is possible that this script crashes at some point. If it does, look at the shell output which will tell you with which *_wcs.fits file it crashed. Look at that file with ds9. You either did not define enough psf stars so that none are found for this image; if that's the case, just add more psf stars to the psfstars.reg file, save it, and run pairitel_astropy_1.py again. Other possibility: that image is so small that it does not make sense to reduce it at all. If that's the case, go to input_info.py, set "bad_files_exist" to "yes" and put the filename into "bad_exposures" as shown. Repeat Step 8. If it crashes at a different file, repeat these repair steps until Step 8 runs without problems.
 
 
 Step 9
@@ -183,6 +184,10 @@ ds9 YSO*/*sub.2.fits &
 - click through the frames to see if a sub file looks weird.
 - There will be some unsubtracted stars in many images, because they were not in the master stars list.
 
+IF THIS SCRIPT CRASHES: The script can crash if not enough good psf stars are given for a particular image. This is because iraf refuses to process psf stars which are too close to an image edge. So if that happens, look at that image in ds9, overlay the psfstars.reg file, add some more psf stars, and save the psfstars.reg file again, using decimal coordinates. If there are no more suitable psf stars to be found in the image, add the image file name to "bad_exposures" as described in step 8.
+Then run Step 8 and Step 12 again. (Not the steps inbetween. I mean, you could, but it's unneccessary. And you'd have to define the masterstars.reg file again, which is some manual work.)
+
+
 
 Step 13
 
@@ -202,13 +207,14 @@ execfile('/pathtofile/pairitel_astropy_4.py')
 
 This script collects the raw magnitudes of all sources in all nights and combines them into (uncalibrated) light curves for each source. All light curves are stored in a single file, where each source is given a unique identifier (similar to the YSOVAR2 database). This file is by default:
 input_info.resultfolder + 'rawlcs.dat'
+You don't have to do anything about that, I just mention it if you want to find that file and look into it.
 
 
 Step 15
 
-This script uses the infrastructure provided by the pYSOVAR package; the uncalibrated light curves are transformed into an atlas object which adds some nice functionalities the script will use.
+This script uses the infrastructure provided by the pYSOVAR package; the uncalibrated light curves are transformed into a pYSOVAR atlas object which adds some nice functionalities the script will use.
 The matching 2MASS magnitudes are found for sources which have 2MASS counterparts. 
-In this step, all sources with 2MASS counterparts are used for the calibration. All magnitudes are shifted linearly to the 2MASS magnitudes, and the standard deviation of (Pairitel_calibarted - 2MASS) is added to the photometric errors as the systematic error induced by the fit. This will overestimate the true errors: In this fit, there will be intrinsically variable sources which induce a large scatter. 
+In this step, all sources with 2MASS counterparts are used for the calibration. All magnitudes are shifted linearly to the 2MASS magnitudes, and the standard deviation of (Pairitel_calibrated - 2MASS) is added to the photometric errors as the systematic error induced by the fit. This will overestimate the true errors: In this fit, there will be intrinsically variable sources which induce a large scatter. 
 
 DO THIS:
 - Run 'pairitel_astropy_5.py' in the astropy shell.
